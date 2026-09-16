@@ -1,0 +1,9 @@
+# Normalise to LF in the repository. Without this, a Windows checkout rewrites
+# every file on commit and the first diff on another machine is 15,000 lines of
+# line-ending noise.
+* text=auto eol=lf
+
+# Binary-ish or generated; never diffed by hand.
+package-lock.json -diff
+src/lib/demo/corpus.ts linguist-generated=true
+src/lib/db/schema.ts   linguist-generated=true

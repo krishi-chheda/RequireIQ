@@ -1,0 +1,20 @@
+node_modules/
+.next/
+out/
+build/
+*.tsbuildinfo
+next-env.d.ts.bak
+.env
+.env.local
+.env*.local
+data/*.db
+data/*.db-journal
+data/*.db-wal
+data/*.db-shm
+data/uploads/
+.DS_Store
+npm-debug.log*
+coverage/
+
+# Vercel
+.vercel
