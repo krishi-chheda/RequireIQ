@@ -18,6 +18,15 @@ import { HealthDial } from "@/components/health";
 export const metadata: Metadata = { title: "Executive overview" };
 
 /**
+ * Rendered per request, not prerendered.
+ *
+ * Every figure on this page is read from a database a reviewer can change. A
+ * statically prerendered dashboard would keep showing the counts that happened
+ * to be true when the bundle was built.
+ */
+export const dynamic = "force-dynamic";
+
+/**
  * Executive overview.
  *
  * The portfolio-level read. Every figure links to the screen that would let a
