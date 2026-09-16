@@ -18,3 +18,6 @@ coverage/
 
 # Vercel
 .vercel
+
+# Third-party sample documents - see samples/rfp/README.md for sources
+samples/rfp/*.pdf
