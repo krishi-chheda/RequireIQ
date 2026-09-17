@@ -44,7 +44,7 @@
 
 ---
 
-## Task 1: Choose and isolate a PDF text extractor
+### Task 1: Choose and isolate a PDF text extractor
 
 **Files:**
 - Create: `src/lib/pdf.ts`
@@ -216,7 +216,7 @@ characters-per-page rather than parsing them into meaningless requirements."
 
 ---
 
-## Task 2: Wire PDF into the ingestion seam
+### Task 2: Wire PDF into the ingestion seam
 
 **Files:**
 - Modify: `src/lib/ingest.ts:31-40` (extension sets), `:77-101` (`extractText`)
@@ -350,7 +350,7 @@ handling stays in src/lib/pdf.ts; nothing downstream knows the format."
 
 ---
 
-## Task 3: Strip page furniture and normalise bullets
+### Task 3: Strip page furniture and normalise bullets
 
 **Files:**
 - Create: `src/lib/ai/engine/structure.ts`
@@ -505,7 +505,7 @@ catches furniture that carries no page number."
 
 ---
 
-## Task 4: Detect headings in plain text
+### Task 4: Detect headings in plain text
 
 **Files:**
 - Modify: `src/lib/ai/engine/structure.ts`
@@ -666,7 +666,7 @@ form labels."
 
 ---
 
-## Task 5: Feed structure detection into the chunker
+### Task 5: Feed structure detection into the chunker
 
 **Files:**
 - Modify: `src/lib/ai/engine/text.ts:109-200` (`chunkDocument` and its constants)
@@ -800,7 +800,7 @@ document actually being a transcript."
 
 ---
 
-## Task 6: Store the cleaned text so offsets stay truthful
+### Task 6: Store the cleaned text so offsets stay truthful
 
 **Files:**
 - Modify: `src/lib/ingest.ts` (`ingestDocument`), `src/lib/db/seed.ts`
@@ -882,7 +882,7 @@ every citation a few hundred characters out."
 
 ---
 
-## Task 7: Classify who an obligation binds
+### Task 7: Classify who an obligation binds
 
 **Files:**
 - Create: `src/lib/ai/engine/binds-on.ts`
@@ -1068,7 +1068,7 @@ which rejected 132 genuine obligations from two RFPs for the same reason."
 
 ---
 
-## Task 8: Replace the domain-noun filter, and migrate the schema
+### Task 8: Replace the domain-noun filter, and migrate the schema
 
 **Files:**
 - Modify: `src/lib/ai/engine/extract.ts:91-98` (remove `DOMAIN_NOUNS`), `:163-166` (the rejection), `:47-58` (`ExtractedRequirement`)
@@ -1285,7 +1285,7 @@ cannot add a column to an existing table."
 
 ---
 
-## Task 9: Surface bindsOn in the register
+### Task 9: Surface bindsOn in the register
 
 **Files:**
 - Modify: `src/app/app/projects/[projectId]/requirements/page.tsx`
@@ -1392,7 +1392,7 @@ git commit -m "Surface bindsOn in the register, detail view and exports"
 
 ---
 
-## Task 10: The synthetic RFP fixture and the success criteria
+### Task 10: The synthetic RFP fixture and the success criteria
 
 **Files:**
 - Create: `demo-data-rfp/synthetic-rfp.txt`
@@ -1625,7 +1625,7 @@ structural features. npm run probe:rfp measures the real documents locally."
 
 ---
 
-## Task 11: Update the documentation to match
+### Task 11: Update the documentation to match
 
 **Files:**
 - Modify: `README.md`, `docs/analysis-engine.md`, `docs/architecture.md`
