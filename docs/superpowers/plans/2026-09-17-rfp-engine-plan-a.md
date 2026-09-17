@@ -1630,6 +1630,10 @@ structural features. npm run probe:rfp measures the real documents locally."
 **Files:**
 - Modify: `README.md`, `docs/analysis-engine.md`, `docs/architecture.md`
 
+**Interfaces:**
+- Consumes: the finished behaviour of Tasks 1-10
+- Produces: nothing executable - documentation only
+
 - [ ] **Step 1: Update the README**
 
 - Formats: PDF moves from *Known limitations* into the supported list; DOCX stays limited.
