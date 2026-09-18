@@ -16,8 +16,8 @@
 const MIN_CHARS_PER_PAGE = 120;
 
 export class PdfExtractionError extends Error {
-  constructor(message: string) {
-    super(message);
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
     this.name = "PdfExtractionError";
   }
 }
@@ -34,9 +34,10 @@ export async function extractPdfText(
     const result = await extractText(pdf, { mergePages: true });
     text = String(result.text);
     pageCount = Math.max(1, result.totalPages);
-  } catch {
+  } catch (cause) {
     throw new PdfExtractionError(
       "This file could not be read as a PDF. It may be corrupt or password protected.",
+      { cause },
     );
   }
 
