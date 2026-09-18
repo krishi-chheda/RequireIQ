@@ -71,7 +71,7 @@ export async function POST(
         ? z.text(authorInput, { max: 120, label: "author" })
         : null;
 
-    const content = extractText(filename, new Uint8Array(await file.arrayBuffer()));
+    const content = await extractText(filename, new Uint8Array(await file.arrayBuffer()));
     const result = ingestDocument({ projectId, title, filename, content, author });
 
     revalidatePath(`/app/projects/${projectId}`, "layout");

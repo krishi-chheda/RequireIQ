@@ -77,7 +77,7 @@ export function UploadPanel({ projectId }: { projectId: string }) {
             {busy ? "Analysing..." : "Drop a file here, or choose one"}
           </p>
           <p className="mx-auto mt-1.5 max-w-md text-[11.5px] leading-relaxed text-ink-faint">
-            Plain text formats: .txt, .md, .csv, .eml, .log, .json. Up to 5 MB. The fifteen demo documents in{" "}
+            Plain text formats and PDF: .txt, .md, .csv, .eml, .log, .json, .pdf. Up to 5 MB. The fifteen demo documents in{" "}
             <code className="font-mono text-[11px]">demo-data/</code> can be re-uploaded to try it.
           </p>
 
@@ -85,7 +85,7 @@ export function UploadPanel({ projectId }: { projectId: string }) {
             ref={inputRef}
             id="document-upload"
             type="file"
-            accept=".txt,.md,.markdown,.csv,.tsv,.log,.eml,.json"
+            accept=".txt,.md,.markdown,.csv,.tsv,.log,.eml,.json,.pdf"
             className="sr-only"
             onChange={(event) => {
               const file = event.target.files?.[0];
@@ -176,11 +176,12 @@ export function UploadPanel({ projectId }: { projectId: string }) {
         <div className="mt-5 border-t border-line pt-4">
           <Eyebrow>Formats this build cannot read</Eyebrow>
           <p className="mt-1.5 max-w-2xl text-[11.5px] leading-relaxed text-ink-faint">
-            PDF and DOCX are architecturally supported but have no parser in this build. The analysis pipeline
+            DOCX is architecturally supported but has no parser in this build. The analysis pipeline
             takes a string, so adding one means implementing a single branch in{" "}
             <code className="font-mono text-[11px]">extractText()</code> and nothing else - no screen, query or
             detector changes. Uploading one returns a clear message rather than failing silently or, worse,
-            analysing binary noise into plausible-looking requirements.
+            analysing binary noise into plausible-looking requirements. A scanned PDF with no selectable text is
+            refused the same way, since it needs OCR.
           </p>
         </div>
       </div>

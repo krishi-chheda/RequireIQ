@@ -33,7 +33,6 @@ const TEXT_EXTENSIONS = new Set(["txt", "md", "markdown", "csv", "tsv", "log", "
 
 /** Formats the architecture supports but this build has no parser for. */
 const BINARY_EXTENSIONS: Record<string, string> = {
-  pdf: "PDF text extraction needs a parser (pdfjs-dist or pdf-parse). The pipeline below is format-agnostic - it takes a string - so adding one is a single function.",
   docx: "DOCX text extraction needs a parser (mammoth). The pipeline below is format-agnostic, so adding one is a single function.",
   doc: "Legacy .doc is not readable without a converter. Save as .docx or paste the text.",
   msg: "Outlook .msg needs a parser. Export the thread as plain text instead.",
@@ -74,15 +73,26 @@ export interface IngestResult {
  * downstream takes a string, so supporting PDF means implementing this one
  * branch and nothing else.
  */
-export function extractText(filename: string, bytes: Uint8Array): string {
+export async function extractText(filename: string, bytes: Uint8Array): Promise<string> {
   const extension = filename.split(".").pop()?.toLowerCase() ?? "";
+
+  if (extension === "pdf") {
+    const { extractPdfText, PdfExtractionError } = await import("./pdf");
+    try {
+      const { text } = await extractPdfText(bytes);
+      return text;
+    } catch (error) {
+      if (error instanceof PdfExtractionError) throw new IngestError(error.message);
+      throw error;
+    }
+  }
 
   const unsupported = BINARY_EXTENSIONS[extension];
   if (unsupported) throw new IngestError(unsupported, true);
 
   if (!TEXT_EXTENSIONS.has(extension)) {
     throw new IngestError(
-      `"${extension || "no extension"}" is not a format this build reads. Supported: ${[...TEXT_EXTENSIONS].sort().join(", ")}.`,
+      `"${extension || "no extension"}" is not a format this build reads. Supported: ${[...TEXT_EXTENSIONS, "pdf"].sort().join(", ")}.`,
       true,
     );
   }
