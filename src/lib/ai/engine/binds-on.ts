@@ -27,8 +27,8 @@ const CUES: Array<{ bindsOn: BindsOn; terms: string[] }> = [
     bindsOn: "supplier",
     terms: [
       "successful offeror", "selected respondent", "successful respondent",
-      "awarded vendor", "successful proposer", "contractor", "the supplier",
-      "the vendor", "service provider", "the awarded",
+      "awarded vendor", "successful proposer", "contractor", "supplier",
+      "vendor", "service provider", "the awarded",
     ],
   },
   {
@@ -41,8 +41,16 @@ const CUES: Array<{ bindsOn: BindsOn; terms: string[] }> = [
   {
     bindsOn: "buyer",
     terms: [
+      // "the state" and "the client" dropped: measured against two real RFPs,
+      // "the state" was governing-law boilerplate ("...laws of the State of
+      // New Mexico") in every case that matched, never a genuine buyer
+      // obligation - "the city"/"the county"/"the authority"/"the agency"/
+      // "the department" already cover government buyers. "the client" would
+      // catch "the client application/portal/device", standard IT-RFP phrasing
+      // for the system side, inverting the accountability; "the purchaser"
+      // and the government cues already cover the buyer role.
       "the city", "the county", "the authority", "the agency", "the department",
-      "the purchaser", "the client", "the bank", "the buyer", "the state",
+      "the purchaser", "the bank", "the buyer",
     ],
   },
   {
