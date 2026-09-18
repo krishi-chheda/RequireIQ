@@ -16,6 +16,11 @@ const PAGE_NUMBER = /^\s*(?:page\s+\d+(?:\s+of\s+\d+)?|-\s*\d+\s*-|\d{1,4})\s*$/
 /** Bullet glyphs, including the replacement character PDF extraction produces. */
 const BULLET = /^(\s*)[�•‣▪●◦·⁃∙*]\s+/;
 
+/** A normalised list item ("- text"). Running headers and footers are never
+ * bulleted, so a line carrying a list marker is never a furniture candidate,
+ * no matter how many times identical bulleted text repeats. */
+const LIST_ITEM = /^-\s+\S/;
+
 /**
  * A line repeated at least this many times, in a document long enough for the
  * repetition to be meaningful, is running header or footer text.
@@ -25,18 +30,15 @@ const FURNITURE_MIN_LINES = 8;
 const FURNITURE_MAX_LENGTH = 120;
 
 export function cleanDocumentText(text: string): string {
-  // Normalise bullets first. Counting furniture on the pre-normalisation line
-  // let three differently-glyphed bullets survive pass one as distinct
-  // strings, then collapse to one identical string once rewritten - which
-  // pass two would then see as furniture and delete. Counting on the
-  // post-normalisation line makes both passes see the same strings, which is
-  // what idempotency requires.
+  // Normalise bullets first, so both the LIST_ITEM exclusion below and the
+  // furniture count itself see the same, stable strings on every call.
   const lines = text.split("\n").map((line) => line.replace(BULLET, "$1- "));
 
   const counts = new Map<string, number>();
   for (const line of lines) {
     const key = line.trim();
     if (!key || key.length > FURNITURE_MAX_LENGTH) continue;
+    if (LIST_ITEM.test(key)) continue;
     counts.set(key, (counts.get(key) ?? 0) + 1);
   }
 

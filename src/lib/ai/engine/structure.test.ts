@@ -50,25 +50,56 @@ describe("cleanDocumentText", () => {
     expect(cleanDocumentText(text)).toContain("Shared sentence here.");
   });
 
-  it("stays idempotent when different bullet glyphs normalise to identical text", () => {
-    // Three distinct raw bullets prefixing identical text are three distinct
-    // strings pre-normalisation, so none reaches the furniture threshold on
-    // their own - but they all rewrite to the same "- Vendors shall respond."
-    // Counting furniture before normalisation let the first pass keep all
-    // three (none matched yet) and the second pass then see three identical
-    // already-normalised lines and delete them as furniture: clean(clean(x))
-    // was dropping a requirement that clean(x) had kept.
-    const bulletLines = [
-      "• Vendors shall respond.",
-      "· Vendors shall respond.",
-      "‣ Vendors shall respond.",
-    ];
-    const filler = Array.from({ length: 10 }, (_, i) => `Clause ${i} shall apply.`);
-    const text = [...bulletLines, ...filler].join("\n");
-    const once = cleanDocumentText(text);
-    const twice = cleanDocumentText(once);
-    expect(twice).toBe(once);
-  });
+  it.each([5, 17, 47])(
+    "keeps repeated bulleted content, and stays idempotent, with %i filler lines",
+    (fillerCount) => {
+      // Running headers and footers are never bulleted, so a bullet-prefixed
+      // line must never be a furniture candidate, however many times its
+      // normalised text repeats. Three distinct raw bullets prefixing
+      // identical text used to converge to one string after normalisation
+      // and get read as furniture - on the second call before round 1's fix,
+      // on the first call after it (same data loss, just sooner). Checked at
+      // several lengths above FURNITURE_MIN_LINES because a single short
+      // fixture can pass by missing the threshold entirely rather than by
+      // the exclusion actually working.
+      const bulletLines = [
+        "• Vendors shall respond.",
+        "· Vendors shall respond.",
+        "‣ Vendors shall respond.",
+      ];
+      const filler = Array.from({ length: fillerCount }, (_, i) => `Clause ${i} shall apply.`);
+      const text = [...bulletLines, ...filler].join("\n");
+      expect(text.split("\n").length).toBeGreaterThanOrEqual(8);
+
+      const once = cleanDocumentText(text);
+      expect(once.match(/- Vendors shall respond\./g)).toHaveLength(3);
+
+      const twice = cleanDocumentText(once);
+      expect(twice).toBe(once);
+    },
+  );
+
+  it.each([0, 12, 42])(
+    "still strips a repeated unbulleted header, with %i extra filler lines",
+    (fillerCount) => {
+      // The property the LIST_ITEM exclusion must not break: an unbulleted
+      // repeated header is still furniture and still gets removed, at
+      // several document lengths above the threshold.
+      const base = Array.from({ length: 4 }, (_, i) =>
+        ["CITY OF SOMEWHERE RFP 2026-01", `Clause ${i}: the system shall do a thing.`].join("\n"),
+      ).join("\n");
+      const filler = Array.from(
+        { length: fillerCount },
+        (_, i) => `Filler clause ${i} shall apply.`,
+      ).join("\n");
+      const text = filler ? `${base}\n${filler}` : base;
+      expect(text.split("\n").length).toBeGreaterThanOrEqual(8);
+
+      const cleaned = cleanDocumentText(text);
+      expect(cleaned.match(/CITY OF SOMEWHERE RFP 2026-01/g)).toBeNull();
+      expect(cleaned).toContain("the system shall do a thing.");
+    },
+  );
 });
 
 describe("detectHeading", () => {
