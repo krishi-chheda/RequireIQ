@@ -77,6 +77,7 @@ CREATE TABLE IF NOT EXISTS requirements (
   acceptance_criteria     TEXT,
   post_baseline           INTEGER NOT NULL DEFAULT 0,
   quality_score           REAL NOT NULL DEFAULT 0,
+  binds_on                TEXT NOT NULL DEFAULT 'unknown',
   created_at              TEXT NOT NULL,
   updated_at              TEXT NOT NULL,
   UNIQUE (project_id, ref)

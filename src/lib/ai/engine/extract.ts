@@ -1,4 +1,5 @@
 import type { Constraint, Priority, RequirementType } from "@/lib/types";
+import { classifyBindsOn, type BindsOn } from "./binds-on";
 import { classifyPriority, classifyRequirement } from "./classify";
 import {
   boundDirection,
@@ -55,6 +56,8 @@ export interface ExtractedRequirement {
   evidence: ExtractedEvidence;
   /** Text the extractor believes states how the requirement is verified. */
   acceptanceCriteria: string | null;
+  bindsOn: BindsOn;
+  bindsOnEvidence: string;
 }
 
 export interface ExtractedConstraint {
@@ -95,6 +98,8 @@ const DOMAIN_NOUNS = [
   "api", "session", "vendor", "dashboard", "report", "alert", "spend",
   "infrastructure", "licence", "budget", "team", "colleague", "analyst",
   "underwriter", "adviser", "channel", "test", "image", "token", "key",
+  "offeror", "respondent", "proposer", "bidder", "tenderer", "contractor",
+  "proposal", "bid", "submission", "solicitation", "awardee", "subcontractor", "firm",
 ];
 
 /** Sentences containing these are explicitly not requirements. */
@@ -184,7 +189,11 @@ export function extractFromDocument(input: ExtractionInput): ExtractionResult {
         continue;
       }
 
-      requirements.push(buildRequirement(statement, obligation, evidence, speakerId, input.kind));
+      // classifyBindsOn never gates extraction - `unknown` is an honest
+      // outcome that surfaces for review, not a reason to discard a real
+      // obligation (see docs/superpowers/specs/2026-09-16-rfp-ingestion-p1-design.md).
+      const binding = classifyBindsOn(statement);
+      requirements.push(buildRequirement(statement, obligation, evidence, speakerId, input.kind, binding));
     }
   }
 
@@ -197,6 +206,7 @@ function buildRequirement(
   evidence: ExtractedEvidence,
   ownerStakeholderId: string | null,
   kind: string,
+  binding: { bindsOn: BindsOn; evidence: string },
 ): ExtractedRequirement {
   const classification = classifyRequirement(statement);
   const { priority, evidence: priorityEvidence } = classifyPriority(statement);
@@ -238,6 +248,8 @@ function buildRequirement(
     ownerStakeholderId,
     evidence,
     acceptanceCriteria: deriveAcceptanceCriteria(statement, quantities.length > 0),
+    bindsOn: binding.bindsOn,
+    bindsOnEvidence: binding.evidence,
   };
 }
 

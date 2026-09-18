@@ -2,6 +2,7 @@ import "server-only";
 
 import { getDb } from "./db";
 import type { ProjectContext } from "./ai/provider";
+import type { BindsOn } from "./ai/engine/binds-on";
 import type {
   Ambiguity,
   AmbiguityKind,
@@ -107,6 +108,7 @@ function mapRequirement(row: Row): Requirement {
     acceptanceCriteria: strOrNull(row.acceptance_criteria),
     postBaseline: bool(row.post_baseline),
     qualityScore: num(row.quality_score),
+    bindsOn: str(row.binds_on) as BindsOn,
     createdAt: str(row.created_at),
     updatedAt: str(row.updated_at),
   };

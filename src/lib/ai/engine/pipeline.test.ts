@@ -324,3 +324,34 @@ describe("further detectors", () => {
     expect([...severities].sort((a, b) => b - a)).toEqual(severities);
   });
 });
+
+describe("obligations that the old vocabulary filter discarded", () => {
+  it.each([
+    "All proposals submitted shall be valid for ninety (90) days.",
+    "The offeror must be registered and licensed to do business in the State.",
+    "Contractor shall submit evidence of insurance as is required herein.",
+    "It shall be the Respondent's sole risk to assure submission by the time.",
+  ])("now extracts %j", (sentence) => {
+    const result = extractFromDocument({
+      documentId: "d1",
+      content: `3.1 Submission\n\n${sentence}`,
+      kind: "specification",
+      stakeholdersByName: new Map(),
+      defaultStakeholderId: null,
+    });
+    expect(result.requirements).toHaveLength(1);
+    expect(result.requirements[0]!.bindsOn).not.toBe("unknown");
+  });
+
+  it("extracts an obligation with no identifiable actor, surfacing bindsOn as unknown rather than discarding it", () => {
+    const result = extractFromDocument({
+      documentId: "d1",
+      content: "3.1 General\n\nThe team must document the process within five days.",
+      kind: "specification",
+      stakeholdersByName: new Map(),
+      defaultStakeholderId: null,
+    });
+    expect(result.requirements).toHaveLength(1);
+    expect(result.requirements[0]!.bindsOn).toBe("unknown");
+  });
+});

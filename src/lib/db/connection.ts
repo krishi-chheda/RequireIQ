@@ -3,6 +3,7 @@ import "server-only";
 import { DatabaseSync } from "node:sqlite";
 import { mkdirSync } from "node:fs";
 import { dirname, isAbsolute, join } from "node:path";
+import { runMigrations } from "./migrations";
 import { SCHEMA_SQL } from "./schema";
 
 /**
@@ -61,6 +62,7 @@ export function openDb(): DatabaseSync {
   db.exec("PRAGMA foreign_keys = ON;");
   db.exec("PRAGMA busy_timeout = 5000;");
   db.exec(SCHEMA_SQL);
+  runMigrations(db);
 
   handle = db;
   return db;
