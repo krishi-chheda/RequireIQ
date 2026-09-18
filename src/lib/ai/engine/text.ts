@@ -8,6 +8,8 @@
  * paraphrase it.
  */
 
+import { cleanDocumentText, detectHeading, isTranscript } from "./structure";
+
 export interface Sentence {
   text: string;
   /** Offset of the first character of `text` within the document. */
@@ -120,7 +122,12 @@ const EMAIL_HEADER = /^(From|To|Cc|Date|Subject):\s*(.*)$/i;
  */
 export function chunkDocument(content: string): Chunk[] {
   const chunks: Chunk[] = [];
-  const lines = content.split("\n");
+  const cleaned = cleanDocumentText(content);
+  const lines = cleaned.split("\n");
+
+  // Speaker attribution is a document-level decision. Applying the per-line
+  // pattern to an RFP invents speakers out of form labels.
+  const transcript = isTranscript(lines);
 
   let currentHeading = "Preamble";
   let buffer: string[] = [];
@@ -152,16 +159,18 @@ export function chunkDocument(content: string): Chunk[] {
     const lineStart = offset;
     offset += line.length + 1;
 
-    const heading = HEADING.exec(line);
-    if (heading) {
+    const markdownHeading = HEADING.exec(line);
+    const plainHeading = markdownHeading ? null : detectHeading(line);
+    if (markdownHeading || plainHeading) {
       flush();
-      currentHeading = (heading[2] ?? "").trim() || currentHeading;
+      currentHeading =
+        (markdownHeading ? (markdownHeading[2] ?? "").trim() : plainHeading!) || currentHeading;
       inHeaderBlock = false;
       bufferStart = offset;
       continue;
     }
 
-    const turn = SPEAKER_TURN.exec(line);
+    const turn = transcript ? SPEAKER_TURN.exec(line) : null;
     if (turn && turn[1]) {
       flush();
       const name = turn[1].trim();
