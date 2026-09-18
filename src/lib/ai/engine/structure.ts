@@ -25,7 +25,13 @@ const FURNITURE_MIN_LINES = 8;
 const FURNITURE_MAX_LENGTH = 120;
 
 export function cleanDocumentText(text: string): string {
-  const lines = text.split("\n");
+  // Normalise bullets first. Counting furniture on the pre-normalisation line
+  // let three differently-glyphed bullets survive pass one as distinct
+  // strings, then collapse to one identical string once rewritten - which
+  // pass two would then see as furniture and delete. Counting on the
+  // post-normalisation line makes both passes see the same strings, which is
+  // what idempotency requires.
+  const lines = text.split("\n").map((line) => line.replace(BULLET, "$1- "));
 
   const counts = new Map<string, number>();
   for (const line of lines) {
@@ -46,7 +52,7 @@ export function cleanDocumentText(text: string): string {
     const trimmed = line.trim();
     if (PAGE_NUMBER.test(trimmed)) continue;
     if (furniture.has(trimmed)) continue;
-    kept.push(line.replace(BULLET, "$1- "));
+    kept.push(line);
   }
 
   // Collapse the runs of blank lines that removal leaves behind, otherwise the
@@ -62,8 +68,14 @@ const LETTERED_CLAUSE = /^\s*([A-Z])\.\s+(\S.{0,90})$/;
 const CAPS_HEADING = /^\s*([A-Z][A-Z0-9 &/,'()-]{3,80})\s*$/;
 /** "Partnerships:" - title-ish, short, ends in a colon. */
 const COLON_HEADING = /^\s*([A-Z][A-Za-z0-9 &/,'()-]{2,60}):\s*$/;
-/** A colon-terminated heading is a short label, not a sentence. */
-const COLON_HEADING_MAX_WORDS = 6;
+/**
+ * A heading is a short label; an obligation sentence ("THE CONTRACTOR SHALL
+ * MAINTAIN COMPLETE RECORDS...", "The solution shall support ... retention:")
+ * is a full clause. Both CAPS_HEADING and COLON_HEADING can be short enough in
+ * characters to pass their length caps while still reading as a sentence, so
+ * both need this word-count guard too.
+ */
+const HEADING_MAX_WORDS = 6;
 
 /**
  * Reads a heading from one line, or null.
@@ -85,14 +97,12 @@ export function detectHeading(line: string): string | null {
   }
 
   const caps = CAPS_HEADING.exec(line);
-  if (caps) return caps[1]!.trim();
+  if (caps && caps[1]!.trim().split(/\s+/).length <= HEADING_MAX_WORDS) {
+    return caps[1]!.trim();
+  }
 
   const colon = COLON_HEADING.exec(line);
-  // The char-length cap alone lets a short obligation sentence through, e.g.
-  // "The solution shall support records management and retention:" (59 chars,
-  // under the 60-char cap). A heading is a short label; an obligation sentence
-  // reads as a full clause. Word count tells them apart where length doesn't.
-  if (colon && colon[1]!.trim().split(/\s+/).length <= COLON_HEADING_MAX_WORDS) {
+  if (colon && colon[1]!.trim().split(/\s+/).length <= HEADING_MAX_WORDS) {
     return colon[1]!.trim();
   }
 
@@ -105,6 +115,13 @@ const SPEAKER_CANDIDATE = /^([A-Z][A-Z .'-]{2,40}?)\s*(?:\([^)]{2,80}\))?\s*:\s*
 /** Distinct speakers, each speaking more than once, before a document counts. */
 const TRANSCRIPT_MIN_SPEAKERS = 2;
 const TRANSCRIPT_MIN_TURNS = 2;
+/**
+ * A repeated field label ("NAME:", "TITLE:") is one word; a person's name is
+ * at least two ("KENJI MORI:"). A signature block that repeats "NAME:" /
+ * "TITLE:" for each contact reaches TRANSCRIPT_MIN_TURNS on repetition alone,
+ * so repetition by itself isn't enough to tell a form from a dialogue.
+ */
+const SPEAKER_MIN_WORDS = 2;
 
 /**
  * Whether a document is a transcript, decided for the document as a whole.
@@ -112,7 +129,9 @@ const TRANSCRIPT_MIN_TURNS = 2;
  * The per-line pattern alone invents speakers out of RFP form labels, because
  * "E-MAIL:" looks exactly like "KENJI MORI:". The distinguishing fact is
  * repetition: a form label appears once, a person in a workshop speaks
- * repeatedly.
+ * repeatedly. But a repeated multi-entry form (a two-contact signature block
+ * repeating "NAME:" / "TITLE:") passes that test too, so a label also has to
+ * look like a name - more than one word - before it counts as a speaker.
  */
 export function isTranscript(lines: string[]): boolean {
   const turns = new Map<string, number>();
@@ -120,6 +139,7 @@ export function isTranscript(lines: string[]): boolean {
     const match = SPEAKER_CANDIDATE.exec(line);
     if (!match?.[1]) continue;
     const name = match[1].trim();
+    if (name.split(/\s+/).length < SPEAKER_MIN_WORDS) continue;
     turns.set(name, (turns.get(name) ?? 0) + 1);
   }
   const repeated = [...turns.values()].filter((n) => n >= TRANSCRIPT_MIN_TURNS);

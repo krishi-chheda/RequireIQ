@@ -49,6 +49,26 @@ describe("cleanDocumentText", () => {
     const text = `Shared sentence here.\n${body}\nShared sentence here.`;
     expect(cleanDocumentText(text)).toContain("Shared sentence here.");
   });
+
+  it("stays idempotent when different bullet glyphs normalise to identical text", () => {
+    // Three distinct raw bullets prefixing identical text are three distinct
+    // strings pre-normalisation, so none reaches the furniture threshold on
+    // their own - but they all rewrite to the same "- Vendors shall respond."
+    // Counting furniture before normalisation let the first pass keep all
+    // three (none matched yet) and the second pass then see three identical
+    // already-normalised lines and delete them as furniture: clean(clean(x))
+    // was dropping a requirement that clean(x) had kept.
+    const bulletLines = [
+      "• Vendors shall respond.",
+      "· Vendors shall respond.",
+      "‣ Vendors shall respond.",
+    ];
+    const filler = Array.from({ length: 10 }, (_, i) => `Clause ${i} shall apply.`);
+    const text = [...bulletLines, ...filler].join("\n");
+    const once = cleanDocumentText(text);
+    const twice = cleanDocumentText(once);
+    expect(twice).toBe(once);
+  });
 });
 
 describe("detectHeading", () => {
@@ -80,6 +100,17 @@ describe("detectHeading", () => {
       detectHeading("The solution shall support records management and retention:"),
     ).toBeNull();
   });
+
+  it("does not read an unpunctuated all-caps obligation sentence as a heading", () => {
+    // 77 chars, inside CAPS_HEADING's 80-char cap, and no terminal [.!?] to
+    // trip the punctuation guard used elsewhere - the char cap alone lets it
+    // through, same gap as the colon case above.
+    expect(
+      detectHeading(
+        "THE CONTRACTOR SHALL MAINTAIN COMPLETE RECORDS OF ALL TRANSACTIONS AND AUDITS",
+      ),
+    ).toBeNull();
+  });
 });
 
 describe("isTranscript", () => {
@@ -104,6 +135,14 @@ describe("isTranscript", () => {
       "E-MAIL:",
       "ADDRESS:",
     ];
+    expect(isTranscript(lines)).toBe(false);
+  });
+
+  it("does not read a repeated two-contact signature block as a transcript", () => {
+    // "NAME" and "TITLE" each repeat twice here, reaching TRANSCRIPT_MIN_TURNS
+    // on repetition alone - the gap the single-occurrence form-label test
+    // above doesn't cover. A field label is one word; a speaker is a name.
+    const lines = ["NAME: Jane Roe", "TITLE: Director", "NAME: John Doe", "TITLE: Manager"];
     expect(isTranscript(lines)).toBe(false);
   });
 });
