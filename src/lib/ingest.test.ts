@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { extractText, IngestError } from "./ingest";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { extractText, IngestError, ingestDocument } from "./ingest";
 import { cleanDocumentText } from "./ai/engine/structure";
 
 const encode = (s: string) => new TextEncoder().encode(s);
@@ -42,5 +45,71 @@ describe("stored content and offsets", () => {
 
     const once = cleanDocumentText(raw);
     expect(cleanDocumentText(once)).toBe(once);
+  });
+
+  it("stores the cleaned text end to end, so a stored citation survives furniture removal", async () => {
+    // Nothing else in the suite calls ingestDocument, and the demo corpus has
+    // no furniture to strip - so this is the only test that would actually
+    // fail if the documents INSERT, the extract() call or the chunkDocument()
+    // call ever went back to storing/analysing `input.content` raw.
+    const dir = mkdtempSync(join(tmpdir(), "requireiq-ingest-"));
+    const previousDbPath = process.env.REQUIREIQ_DB_PATH;
+    process.env.REQUIREIQ_DB_PATH = join(dir, "test.db");
+
+    const { closeDb } = await import("./db");
+    try {
+      const queries = await import("./queries");
+
+      const projectId = queries.listProjects()[0]!.id;
+
+      const raw = [
+        "CITY OF SOMEWHERE",
+        "Page 1 of 9",
+        "",
+        "3.1 General Requirements",
+        "",
+        "The solution shall provide role-based access control for all staff users.",
+        "",
+        "CITY OF SOMEWHERE",
+        "Page 2 of 9",
+        "",
+        "3.2 Capacity",
+        "",
+        "The solution shall support 500 concurrent users at peak load.",
+        "",
+        "CITY OF SOMEWHERE",
+        "Page 3 of 9",
+      ].join("\n");
+
+      const result = ingestDocument({
+        projectId,
+        title: "Furniture-bearing RFP excerpt",
+        filename: "furniture.txt",
+        content: raw,
+      });
+
+      const stored = queries.getDocument(result.documentId)!;
+      expect(stored.content).not.toMatch(/Page \d+ of \d+/);
+      expect(stored.content).not.toContain("CITY OF SOMEWHERE");
+
+      // The property that actually matters: a stored evidence quote must
+      // slice back out of the *stored* document at its recorded offsets.
+      // This is exactly what breaks if storage and analysis ever disagree
+      // on which text - raw or cleaned - they are each working from.
+      const evidence = queries.listEvidenceForDocument(result.documentId);
+      expect(evidence.length).toBeGreaterThan(0);
+      for (const item of evidence) {
+        const slice = stored.content.slice(item.startOffset, item.endOffset);
+        expect(slice.replace(/\s+/g, " ")).toContain(item.quote.slice(0, 40).replace(/\s+/g, " "));
+      }
+    } finally {
+      // Windows keeps a lock on an open SQLite file, so the handle must close
+      // before the temp directory can be removed - even when an assertion
+      // above threw.
+      closeDb();
+      rmSync(dir, { recursive: true, force: true });
+      if (previousDbPath === undefined) delete process.env.REQUIREIQ_DB_PATH;
+      else process.env.REQUIREIQ_DB_PATH = previousDbPath;
+    }
   });
 });
