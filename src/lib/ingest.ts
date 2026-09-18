@@ -5,6 +5,7 @@ import { getDb, transaction } from "./db";
 import { localProvider } from "./ai/local";
 import { analyseAmbiguity, qualityScore } from "./ai/engine/ambiguity";
 import { chunkDocument } from "./ai/engine/text";
+import { cleanDocumentText } from "./ai/engine/structure";
 import { inferRelationships } from "./ai/engine/coverage";
 import type { ConflictSubject } from "./ai/engine/conflict";
 import {
@@ -136,6 +137,12 @@ export function ingestDocument(input: {
   const project = getProject(input.projectId);
   if (!project) throw new IngestError("That project does not exist.");
 
+  // Store what the analyser actually read. The chunker cleans before computing
+  // offsets, so persisting the raw text would leave every citation pointing a
+  // few hundred characters off. Cleaning is idempotent, so the chunker's own
+  // second pass is a no-op.
+  const content = cleanDocumentText(input.content);
+
   const db = getDb();
   const stakeholders = listStakeholders(input.projectId);
   const documentId = `doc_${randomUUID()}`;
@@ -154,8 +161,8 @@ export function ingestDocument(input: {
       author: input.author ?? null,
       capturedAt,
       status: "analysed",
-      wordCount: input.content.split(/\s+/).length,
-      content: input.content,
+      wordCount: content.split(/\s+/).length,
+      content,
       uploadedAt: now,
       userUploaded: true,
     },
@@ -179,8 +186,8 @@ export function ingestDocument(input: {
       input.filename,
       input.author ?? null,
       capturedAt,
-      input.content.split(/\s+/).length,
-      input.content,
+      content.split(/\s+/).length,
+      content,
       now,
     );
 
@@ -189,7 +196,7 @@ export function ingestDocument(input: {
       `INSERT INTO document_chunks (id, document_id, project_id, ordinal, locator, text, start_offset, end_offset)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     );
-    for (const chunk of chunkDocument(input.content)) {
+    for (const chunk of chunkDocument(content)) {
       const chunkId = `chk_${documentId}_${chunk.ordinal}`;
       chunkIds.set(chunk.ordinal, chunkId);
       insertChunk.run(

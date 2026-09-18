@@ -6,6 +6,7 @@ import { localProvider } from "@/lib/ai/local";
 import { analyseAmbiguity, qualityScore } from "@/lib/ai/engine/ambiguity";
 import { inferRelationships } from "@/lib/ai/engine/coverage";
 import { chunkDocument } from "@/lib/ai/engine/text";
+import { cleanDocumentText } from "@/lib/ai/engine/structure";
 import type { ConflictSubject } from "@/lib/ai/engine/conflict";
 import type {
   DocumentKind,
@@ -103,9 +104,14 @@ export function seedDatabase(): void {
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     );
 
+    // Clean once here so every downstream use - the stored document row, the
+    // chunk offsets and the extraction pass - agrees on the same text. Task 5
+    // made the chunker clean before computing offsets; storing raw text here
+    // would leave the demo's own citations pointing a few characters off.
     const documents = DEMO_CORPUS.map((doc, i) => ({
       ...doc,
       id: `doc_${String(i + 1).padStart(2, "0")}`,
+      content: cleanDocumentText(doc.content),
     }));
 
     const chunkIdByDocOrdinal = new Map<string, string>();
