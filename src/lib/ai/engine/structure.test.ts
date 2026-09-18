@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cleanDocumentText } from "./structure";
+import { cleanDocumentText, detectHeading, isTranscript } from "./structure";
 
 describe("cleanDocumentText", () => {
   it("removes a running footer that repeats across pages", () => {
@@ -48,5 +48,62 @@ describe("cleanDocumentText", () => {
     const body = Array.from({ length: 20 }, (_, i) => `Clause ${i} shall apply.`).join("\n");
     const text = `Shared sentence here.\n${body}\nShared sentence here.`;
     expect(cleanDocumentText(text)).toContain("Shared sentence here.");
+  });
+});
+
+describe("detectHeading", () => {
+  it.each([
+    ["3.2.1 Capacity and Throughput", "3.2.1 Capacity and Throughput"],
+    ["  4.2 Scope of Work", "4.2 Scope of Work"],
+    ["C. SCOPE OF WORK", "C. SCOPE OF WORK"],
+    ["EQUAL EMPLOYMENT OPPORTUNITY", "EQUAL EMPLOYMENT OPPORTUNITY"],
+    ["Partnerships:", "Partnerships"],
+  ])("reads %s as a heading", (line, expected) => {
+    expect(detectHeading(line)).toBe(expected);
+  });
+
+  it.each([
+    "The system shall support records retention and disposal scheduling.",
+    "Respondents shall submit a single proposal in response to this RFP.",
+    "",
+    "   ",
+    "3.2.1",
+    "This sentence ends with a colon and is far too long to be a heading of any kind:",
+  ])("does not read %j as a heading", (line) => {
+    expect(detectHeading(line)).toBeNull();
+  });
+
+  it("does not read a short obligation sentence ending in a colon as a heading", () => {
+    // Under the char-length cap (59 chars) but a full sentence, not a label -
+    // the case the char cap alone lets through.
+    expect(
+      detectHeading("The solution shall support records management and retention:"),
+    ).toBeNull();
+  });
+});
+
+describe("isTranscript", () => {
+  it("recognises a real transcript by repeated named speakers", () => {
+    const lines = [
+      "KENJI MORI (Platform Lead): The platform must support 10,000 users.",
+      "TOM DEVLIN (Architect): Where did that number come from?",
+      "KENJI MORI: Product modelled it.",
+      "TOM DEVLIN: Noted.",
+    ];
+    expect(isTranscript(lines)).toBe(true);
+  });
+
+  it("does not mistake RFP form labels for speakers", () => {
+    // The probe invented speakers called EQUAL EMPLOYMENT OPPORTUNITY, FIRM,
+    // REPRESENTED BY, TITLE, E-MAIL - each appearing exactly once.
+    const lines = [
+      "EQUAL EMPLOYMENT OPPORTUNITY:",
+      "FIRM:",
+      "REPRESENTED BY:",
+      "TITLE:",
+      "E-MAIL:",
+      "ADDRESS:",
+    ];
+    expect(isTranscript(lines)).toBe(false);
   });
 });
