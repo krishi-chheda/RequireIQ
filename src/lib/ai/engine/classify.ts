@@ -10,7 +10,21 @@ import { extractQuantities } from "./text";
  * with the classifier instead of trusting it.
  */
 
-/** Weighted cues per class. Multi-word cues are matched as substrings. */
+/**
+ * Weighted cues per class.
+ *
+ * Every cue is anchored at a word start and matched as a prefix from there, so
+ * an inflection still counts ("record" -> "records", "integrat" ->
+ * "integration", "event" -> "events") but a cue landing in the middle of an
+ * unrelated word does not. Measured before changing it: plain substring
+ * matching classified "uploaded documents" and "downloading the solicitation"
+ * as performance on "load", "a separate capital request" as technical on
+ * "api", "speaker identification" as performance on "peak", "a seamless
+ * transition" as compliance on "aml", and "prevent the delayed" as technical
+ * on "event" - 2 statements in the demo corpus and 7 across the two sample
+ * RFPs. Whole-word matching would fix those too but costs 10 and 28
+ * respectively, because it also throws away the inflections the cues rely on.
+ */
 const CLASS_CUES: Record<RequirementType, Array<[string, number]>> = {
   performance: [
     ["concurrent", 3], ["throughput", 3], ["latency", 3], ["response time", 3],
@@ -27,7 +41,10 @@ const CLASS_CUES: Record<RequirementType, Array<[string, number]>> = {
   compliance: [
     ["regulat", 3], ["aml", 3], ["kyc", 3], ["sanctions", 3], ["money laundering", 3],
     ["politically exposed", 3], ["audit trail", 3], ["retention", 2], ["retained", 2],
-    ["statutory", 3], ["policy", 1], ["wcag", 2], ["legal", 2], ["supervis", 2],
+    // "illegal" is listed in its own right: anchoring means "legal" no longer
+    // reaches inside it, and an obligation about illegal payments is as much a
+    // compliance statement as one about legal ones.
+    ["statutory", 3], ["policy", 1], ["wcag", 2], ["legal", 2], ["illegal", 2], ["supervis", 2],
     ["financial crime", 3], ["screening", 2], ["data protection", 3], ["gdpr", 3],
     ["records", 1], ["disposal", 2], ["consent", 2],
   ],
@@ -65,6 +82,13 @@ const CLASS_CUES: Record<RequirementType, Array<[string, number]>> = {
   ],
 };
 
+/** One word-start-anchored pattern per cue, compiled once at module load. */
+const CUE_PATTERNS = new Map<string, RegExp>(
+  Object.values(CLASS_CUES)
+    .flat()
+    .map(([cue]) => [cue, new RegExp(`\\b${cue.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "i")] as const),
+);
+
 export interface Classification {
   type: RequirementType;
   /** 0-1 separation between the winner and runner-up, used for confidence. */
@@ -80,7 +104,6 @@ export interface Classification {
  * matched nothing specific is a plain capability statement, not a mystery.
  */
 export function classifyRequirement(statement: string): Classification {
-  const haystack = statement.toLowerCase();
   const scores = new Map<RequirementType, number>();
   const hits = new Map<RequirementType, string[]>();
 
@@ -88,7 +111,7 @@ export function classifyRequirement(statement: string): Classification {
     let score = 0;
     const matched: string[] = [];
     for (const [cue, weight] of cues) {
-      if (haystack.includes(cue)) {
+      if (CUE_PATTERNS.get(cue)?.test(statement)) {
         score += weight;
         matched.push(cue);
       }

@@ -84,6 +84,15 @@ const OBLIGATION_PATTERNS: Array<{ re: RegExp; strength: number; label: string }
   { re: /\b(has to|have to|needs to|need to)\b/i, strength: 0.7, label: "informal obligation" },
   { re: /\b(should|ought to)\b/i, strength: 0.6, label: "recommendation modal" },
   { re: /\b(will be able to|can be)\b/i, strength: 0.3, label: "capability phrasing" },
+  // A buyer commits with "will", not "shall": "The City will provide test data
+  // within ten working days of contract award" is a real obligation on the
+  // acquiring party (ISO 29148 reads "will" as a statement of intent), and
+  // without this the register captures only the obligations pointing at the
+  // supplier. Anchored at the sentence subject on purpose - a bare /\bwill\b/
+  // also swallows narrative consequence ("the two documents will appear to
+  // disagree", "we will be running two origination systems"), which measured
+  // as 2 extra non-obligations over the demo corpus.
+  { re: /^[A-Z][A-Za-z'-]*(?:\s+[A-Za-z][A-Za-z'-]*){0,2}\s+will\s+(?:not\s+)?[a-z]/, strength: 0.5, label: "commitment modal" },
 ];
 
 /**
@@ -99,7 +108,7 @@ const DOMAIN_NOUNS = [
   "infrastructure", "licence", "budget", "team", "colleague", "analyst",
   "underwriter", "adviser", "channel", "test", "image", "token", "key",
   "offeror", "respondent", "proposer", "bidder", "tenderer", "contractor",
-  "proposal", "bid", "submission", "solicitation", "awardee", "subcontractor", "firm",
+  "proposal", "bid", "submission", "contract", "solicitation", "awardee", "subcontractor", "firm",
 ];
 
 /**
@@ -137,8 +146,16 @@ const META_MARKERS = [
   "i would come back", "distribution:", "next steps",
 ];
 
-/** Hedges that reduce confidence because the speaker is not committing. */
-const HEDGES = ["i think", "probably", "possibly", "maybe", "roughly", "i would say", "something like", "or so"];
+/**
+ * Hedges that reduce confidence because the speaker is not committing.
+ *
+ * "or so" is the one entry short enough to land inside an unrelated phrase -
+ * "an account for someone" contains it, and measured over the demo corpus that
+ * was docking a firmly-stated requirement 0.15 of confidence for a hedge
+ * nobody made. It is matched as whole words; the rest are unambiguous.
+ */
+const HEDGES = ["i think", "probably", "possibly", "maybe", "roughly", "i would say", "something like"];
+const OR_SO = /\bor so\b/i;
 
 const CONSTRAINT_NOUNS = [
   "budget", "spend", "envelope", "threshold", "cap", "not exceed", "no more than",
@@ -257,7 +274,7 @@ export function describeStatement(statement: string): StatementDescription {
   const binding = classifyBindsOn(statement);
   // A human can rewrite a statement into one with no modal at all; the
   // extractor never reaches here without one.
-  const hedge = HEDGES.find((h) => lower.includes(h));
+  const hedge = HEDGES.find((h) => lower.includes(h)) ?? (OR_SO.test(statement) ? "or so" : undefined);
 
   const reasons = [
     obligation

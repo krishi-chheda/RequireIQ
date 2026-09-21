@@ -12,6 +12,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "db:reset": "node --experimental-strip-types scripts/reset-db.ts",
+    "probe:rfp": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/probe-rfp.mjs",
     "verify": "npm run typecheck && npm run lint && npm run test && npm run build"
   },
   "dependencies": {

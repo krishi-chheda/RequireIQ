@@ -62,8 +62,14 @@ export function cleanDocumentText(text: string): string {
   return kept.join("\n").replace(/\n{3,}/g, "\n\n");
 }
 
-/** "3.2.1 Capacity and Throughput" - the dominant RFP clause form. */
-const NUMBERED_CLAUSE = /^\s*(\d+(?:\.\d+)*)\s+(\S.{0,90})$/;
+/**
+ * "3.2.1 Capacity and Throughput" - the dominant RFP clause form. The trailing
+ * dot is optional because top-level clauses are usually written "4. CONTRACT
+ * REQUIREMENTS" while their children are written "4.1 Insurance"; without it
+ * every top-level heading fell through and its whole section inherited the
+ * previous sibling's locator.
+ */
+const NUMBERED_CLAUSE = /^\s*(\d+(?:\.\d+)*)\.?\s+(\S.{0,90})$/;
 /** "C. SCOPE OF WORK" */
 const LETTERED_CLAUSE = /^\s*([A-Z])\.\s+(\S.{0,90})$/;
 /** A line that is entirely upper case and stands alone. */

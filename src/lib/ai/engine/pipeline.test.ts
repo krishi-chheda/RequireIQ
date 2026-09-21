@@ -355,3 +355,112 @@ describe("obligations that the old vocabulary filter discarded", () => {
     expect(result.requirements[0]!.bindsOn).toBe("unknown");
   });
 });
+
+/**
+ * A detector is only trustworthy if it can be shown not to fire. Each case
+ * below is the nearest miss to a real detection - the same shape, one
+ * ingredient short - because a negative test built from unrelated text proves
+ * nothing about where the boundary actually sits.
+ */
+describe("detectors that must stay silent", () => {
+  const pair = (left: string, right: string): ConflictSubject[] => [
+    { id: "R1", ref: "REQ-1", type: "requirement", statement: left, team: null },
+    { id: "R2", ref: "REQ-2", type: "requirement", statement: right, team: null },
+  ];
+
+  it("does not report a retention contradiction when the two periods are close", () => {
+    // Polarity, data noun and durations all present; the ratio is under 3x, so
+    // the two rules are a rounding difference, not a contradiction.
+    const subjects = pair(
+      "The platform must retain customer records for 40 days after closure.",
+      "The platform must delete customer records within 30 days of closure.",
+    );
+    expect(detectConflicts(subjects).filter((c) => c.kind === "contradiction")).toHaveLength(0);
+  });
+
+  it("does not report a retention contradiction over something that is not held data", () => {
+    const subjects = pair(
+      "The supplier must keep three trained engineers on the account for 24 months.",
+      "The system must remove a resolved alert from the dashboard within 30 days.",
+    );
+    expect(detectConflicts(subjects).filter((c) => c.kind === "contradiction")).toHaveLength(0);
+  });
+
+  it("does not report availability against a recovery time that fits the downtime budget", () => {
+    // 99.9% monthly allows about 43 minutes; a 30 minute RTO spends less than
+    // the month's allowance and is exactly what the target implies.
+    const subjects = pair(
+      "The platform shall achieve 99.9% availability measured monthly.",
+      "The recovery time objective must be under 30 minutes for full service restoration.",
+    );
+    expect(detectConflicts(subjects).filter((c) => c.detector.includes("Availability-to-downtime"))).toHaveLength(0);
+  });
+
+  it("does not read a mentioned date as a committed one", () => {
+    // Both halves of the timeline detector are present except the commitment:
+    // the date is a baseline being referred to, not a date being promised.
+    const subjects = pair(
+      "The scope baseline date of 24 July 2026 must be recorded against every requirement.",
+      "The programme must complete a twelve week observation period before go-live.",
+    );
+    expect(detectConflicts(subjects).filter((c) => c.kind === "temporal")).toHaveLength(0);
+  });
+
+  it("does not report scope divergence for two statements about different things", () => {
+    const subjects = pair(
+      "The platform must support 5,000 concurrent users at peak.",
+      "The supplier must retain incident reports for 5 years after closure.",
+    );
+    expect(detectConflicts(subjects).filter((c) => c.kind === "scope_divergence")).toHaveLength(0);
+  });
+
+  it("does not report scope divergence when the two values agree", () => {
+    const subjects = pair(
+      "The platform must support 5,000 concurrent users at peak.",
+      "The platform must sustain 5,000 concurrent users during the busiest hour.",
+    );
+    expect(detectConflicts(subjects).filter((c) => c.kind === "scope_divergence")).toHaveLength(0);
+  });
+});
+
+describe("the extractor's own boundaries", () => {
+  const extract = (sentence: string) =>
+    extractFromDocument({
+      documentId: "d1",
+      content: `3.1 General\n\n${sentence}`,
+      kind: "specification",
+      stakeholdersByName: new Map(),
+      defaultStakeholderId: null,
+    });
+
+  it("registers a money figure that is not a cap as a requirement, not a constraint", () => {
+    // Same shape as the budget envelope - a sum of money in an obligation -
+    // but bounded from below, so it is a thing to build to, not a limit.
+    const result = extract("The supplier must maintain liability insurance of at least $1,000,000.");
+    expect(result.constraints).toHaveLength(0);
+    expect(result.requirements).toHaveLength(1);
+  });
+
+  it("captures a buyer commitment stated with 'will'", () => {
+    const result = extract("The City will provide test data within ten working days of contract award.");
+    expect(result.requirements).toHaveLength(1);
+    expect(result.requirements[0]!.bindsOn).toBe("buyer");
+  });
+
+  it.each([
+    "Until that change lands, the two documents will appear to disagree with each other.",
+    "If the new platform only serves direct applicants we will be running two systems.",
+  ])("does not read narrative consequence as a commitment: %j", (sentence) => {
+    // The commitment modal is anchored at the sentence subject on purpose. A
+    // bare "will" turns every predicted outcome into a requirement.
+    expect(extract(sentence).requirements).toHaveLength(0);
+  });
+
+  it("does not treat 'for someone' as the hedge 'or so'", () => {
+    const hedged = extract("The system must open an account roughly within five days.");
+    const plain = extract("The system must open an account for someone within five days.");
+    expect(hedged.requirements[0]!.rationale).toContain("hedged");
+    expect(plain.requirements[0]!.rationale).not.toContain("hedged");
+    expect(plain.requirements[0]!.confidence).toBeGreaterThan(hedged.requirements[0]!.confidence);
+  });
+});
