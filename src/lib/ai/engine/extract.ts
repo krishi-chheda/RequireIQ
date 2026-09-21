@@ -1,5 +1,5 @@
 import type { Constraint, Priority, RequirementType } from "@/lib/types";
-import { ACTOR_TERMS, classifyBindsOn, type BindsOn } from "./binds-on";
+import { AGENT_SUBJECT, classifyBindsOn, type BindsOn } from "./binds-on";
 import { classifyPriority, classifyRequirement } from "./classify";
 import {
   boundDirection,
@@ -73,7 +73,7 @@ export interface ExtractionResult {
   requirements: ExtractedRequirement[];
   constraints: ExtractedConstraint[];
   /** Sentences that looked obligation-like but were rejected, with the reason. */
-  rejected: Array<{ sentence: string; reason: string }>;
+  rejected: Array<{ sentence: string; reason: string; kind: RejectionKind }>;
 }
 
 /**
@@ -123,7 +123,7 @@ const COMMITMENT_SUBJECT = /^(.*?)\s+will\s+(?:not\s+)?[a-z]/;
 
 function hasActorSubject(statement: string): boolean {
   const subject = COMMITMENT_SUBJECT.exec(statement)?.[1]?.toLowerCase();
-  return subject !== undefined && ACTOR_TERMS.some((term) => subject.includes(term));
+  return subject !== undefined && AGENT_SUBJECT.test(subject);
 }
 
 /** The first obligation pattern the statement satisfies, guard included. */
@@ -180,26 +180,17 @@ function hasDomainNoun(statement: string, lower: string): boolean {
 }
 
 /**
- * A colon-terminated list stem: "The selected firm shall provide the following
- * services:", "... four sections, as further described below: 1.".
+ * Why a sentence carrying a modal was not registered.
  *
- * It carries a modal but no checkable obligation - the obligation is in the
- * items it introduces, which are separate chunks and are extracted in their own
- * right, so rejecting the stem loses nothing.
+ * A structural kind, not the prose: the P1 coverage metric has to ask "was this
+ * rejected on vocabulary?", and comparing a displayed sentence against one
+ * exact string means any new or reworded reason silently scores as covered.
  *
- * The trailing colon alone is not enough. "Notice ... must be in writing and
- * delivered in person, by courier service or by U.S. mail to:" ends in one but
- * states a real, checkable obligation before it; the colon there introduces an
- * address, not a list of obligations. So a stem also has to announce the list.
+ * META_MARKERS is "vocabulary" as well: it is a word list under a different
+ * label, and rejecting on it is the same judgement as rejecting on DOMAIN_NOUNS.
  */
-const LIST_STEM = /\b(?:the following|as follows|below)\b[^:]*:\s*(?:\d+[.)])?\s*$/i;
-const LIST_STEM_REJECTION = "List stem - the obligation is in the items it introduces, not here.";
+export type RejectionKind = "vocabulary" | "interrogative";
 
-/**
- * The one rejection reason that is a vocabulary judgement rather than a reading
- * of the sentence. The P1 success criterion is stated against it: a shall/must
- * sentence must be extracted, or rejected for some reason *other* than this.
- */
 const VOCABULARY_REJECTION = "No domain subject - conversational rather than buildable.";
 
 /** Sentences containing these are explicitly not requirements. */
@@ -292,7 +283,7 @@ function statementKey(statement: string): string {
 export function extractFromDocument(input: ExtractionInput): ExtractionResult {
   const requirements: ExtractedRequirement[] = [];
   const constraints: ExtractedConstraint[] = [];
-  const rejected: Array<{ sentence: string; reason: string }> = [];
+  const rejected: ExtractionResult["rejected"] = [];
   const seen = new Set<string>();
 
   for (const candidate of candidateStatements(input.content)) {
@@ -305,20 +296,24 @@ export function extractFromDocument(input: ExtractionInput): ExtractionResult {
 
     const lower = statement.toLowerCase();
     if (statement.includes("?")) {
-      rejected.push({ sentence: statement, reason: "Interrogative - a question, not an obligation." });
+      rejected.push({
+        sentence: statement,
+        reason: "Interrogative - a question, not an obligation.",
+        kind: "interrogative",
+      });
       continue;
     }
     const meta = META_MARKERS.find((marker) => lower.includes(marker));
     if (meta) {
-      rejected.push({ sentence: statement, reason: `Facilitation or process note (matched "${meta}").` });
-      continue;
-    }
-    if (LIST_STEM.test(statement)) {
-      rejected.push({ sentence: statement, reason: LIST_STEM_REJECTION });
+      rejected.push({
+        sentence: statement,
+        reason: `Facilitation or process note (matched "${meta}").`,
+        kind: "vocabulary",
+      });
       continue;
     }
     if (!hasDomainNoun(statement, lower)) {
-      rejected.push({ sentence: statement, reason: VOCABULARY_REJECTION });
+      rejected.push({ sentence: statement, reason: VOCABULARY_REJECTION, kind: "vocabulary" });
       continue;
     }
 
@@ -376,8 +371,8 @@ export function obligationCoverage(content: string, result: ExtractionResult): O
   const accounted = new Set<string>();
   for (const requirement of result.requirements) accounted.add(statementKey(requirement.statement));
   for (const constraint of result.constraints) accounted.add(statementKey(constraint.statement));
-  for (const { sentence, reason } of result.rejected) {
-    if (reason !== VOCABULARY_REJECTION) accounted.add(statementKey(sentence));
+  for (const { sentence, kind } of result.rejected) {
+    if (kind !== "vocabulary") accounted.add(statementKey(sentence));
   }
 
   const seen = new Set<string>();
@@ -550,8 +545,16 @@ function looksLikeConstraint(statement: string): boolean {
   return /\bbudget\b|\benvelope\b|\bcapital request\b/.test(lower) && quantities.length > 0;
 }
 
+/**
+ * A single letter counts as a marker ("B. The Contractor must submit ...") as
+ * well as a bullet or a number. Contract boilerplate is lettered, and once the
+ * heading rule stopped mistaking those clauses for section labels the marker
+ * came through into the statement instead. Measured over both real RFPs, the
+ * fixture and the demo corpus, it strips 7 genuine markers and nothing else -
+ * no initial ("J. Smith") reaches a sentence start in any of them.
+ */
 function stripListMarker(text: string): string {
-  return text.replace(/^\s*(?:[-*+]|\d+[.)])\s+/, "");
+  return text.replace(/^\s*(?:[-*+]|\d+[.)]|[A-Za-z][.)])\s+/, "");
 }
 
 /**

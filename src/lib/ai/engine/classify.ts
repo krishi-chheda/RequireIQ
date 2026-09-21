@@ -58,7 +58,7 @@ const CLASS_CUES: Record<RequirementType, Array<[string, number]>> = {
     ["accessib", 3], ["wcag", 3], ["usable", 3], ["easy to use", 3], ["screen reader", 3],
     ["plain language", 3], ["journey", 2], ["interface", 2], ["mobile browser", 2],
     ["abandon", 2], ["customer experience", 2], ["welsh", 2], ["design", 1],
-    ["resume", 1], ["comprehen", 2],
+    ["resume", 1],
   ],
   technical: [
     ["integrat", 3], ["api", 2], ["service bus", 3], ["event", 2], ["deploy", 2],
@@ -91,7 +91,6 @@ const CLASS_CUES: Record<RequirementType, Array<[string, number]>> = {
  * misclassification: "design" matched "designated" x3 and "designee" x1 - dense
  * procurement vocabulary - labelling two submission-deadline clauses ux;
  * "event" matched "eventual", labelling a public-inspection clause technical;
- * "comprehen" matched "comprehensive", labelling an insurance clause ux;
  * "sustain" matched "sustainable", labelling a double-sided-printing clause
  * performance. "access" is here for a second reason as well: as a prefix it
  * also fires on "accessibility", which the ux cue "accessib" already scores, so
@@ -103,7 +102,6 @@ const CLASS_CUES: Record<RequirementType, Array<[string, number]>> = {
  */
 const WHOLE_WORD_CUES: Record<string, string[]> = {
   access: ["access", "accesses", "accessed", "accessing"],
-  comprehen: ["comprehension", "comprehensible"],
   design: ["design", "designs", "designed", "designing"],
   event: ["event", "events"],
   sustain: ["sustain", "sustains", "sustained", "sustaining"],

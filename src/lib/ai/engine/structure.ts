@@ -68,14 +68,6 @@ export function cleanDocumentText(text: string): string {
  * REQUIREMENTS" while their children are written "4.1 Insurance"; without it
  * every top-level heading fell through and its whole section inherited the
  * previous sibling's locator.
- *
- * Being numbered is not enough on its own, though: PDF extraction wraps a long
- * clause across lines, so "1. General Conditions. Contractor shall submit
- * evidence of insurance as is required" (the continuation carries no terminal
- * punctuation) reads as a numbered line too. Treating it as a heading eats the
- * first line of the clause - measured at 4,204 body characters and three
- * genuine "Contractor shall ..." obligations on one sample RFP. HEADING_MAX_WORDS
- * is the discriminator: "4. CONTRACT REQUIREMENTS" is 2 words, that clause is 11.
  */
 const NUMBERED_CLAUSE = /^\s*(\d+(?:\.\d+)*)\.?\s+(\S.{0,90})$/;
 /** "C. SCOPE OF WORK" */
@@ -85,19 +77,51 @@ const CAPS_HEADING = /^\s*([A-Z][A-Z0-9 &/,'()-]{3,80})\s*$/;
 /** "Partnerships:" - title-ish, short, ends in a colon. */
 const COLON_HEADING = /^\s*([A-Z][A-Za-z0-9 &/,'()-]{2,60}):\s*$/;
 /**
- * A heading is a short label; an obligation sentence ("THE CONTRACTOR SHALL
- * MAINTAIN COMPLETE RECORDS...", "The solution shall support ... retention:")
- * is a full clause. CAPS_HEADING, COLON_HEADING and NUMBERED_CLAUSE can all be
- * short enough in characters to pass their length caps while still reading as a
- * sentence, so all three need this word-count guard too.
+ * A heading is a label; an obligation clause wrapped across lines by PDF
+ * extraction ("1. General Conditions. Contractor shall procure and maintain a
+ * comprehensive") looks like one, because the sentence continues overleaf and
+ * so the first line carries no terminal punctuation either.
+ *
+ * Word count is the wrong discriminator. Measured over two real RFPs and the
+ * demo corpus, a cap of six demoted 45 genuine headings ("5.19 Compliance with
+ * Federal, State, County, and Local Laws", "12. PUBLICATION, REPRODUCTION, AND
+ * USE OF MATERIAL; COPYRIGHT") to body, which merged whole sections into their
+ * predecessor and cited their obligations to the *previous* section number - a
+ * wrong citation, worse than a generic one. Raising the cap to nine rescues
+ * those but readmits the wrapped clauses, which are nine words too.
+ *
+ * The two cases differ structurally, not by length: a wrapped clause carries an
+ * internal sentence boundary, an obligation modal, or both; a heading carries
+ * neither. Measured, that rule rescues all 45 and still rejects every wrapped
+ * clause. All four heading forms share it.
  */
-const HEADING_MAX_WORDS = 6;
+const SENTENCE_BOUNDARY = /[.!?]\s+\S/;
+const OBLIGATION_MODAL = /\b(?:shall|must|should|may|will)\b/i;
+
+function isLabel(body: string): boolean {
+  return !SENTENCE_BOUNDARY.test(body) && !OBLIGATION_MODAL.test(body);
+}
+
+/**
+ * ALL-CAPS lines keep a length cap on top of `isLabel`, and only they do.
+ *
+ * A caps clause wraps like any other, but its continuation lines ("EVALUATION
+ * BY THE PROCUREMENT MANAGER OR DESIGNEE NO", "NOT THEY, THEIR FAMILY MEMBER,
+ * OR THEIR REPRESENTATIVE HAS MADE ANY") carry the modal and the sentence
+ * boundary in the *first* line, not in themselves - there is no case signal
+ * left to read, so length is all that is left. Measured, the cap costs nothing
+ * here: every caps line it demotes is such a continuation, and the one caps
+ * heading long enough to need rescuing ("12. PUBLICATION, REPRODUCTION, AND USE
+ * OF MATERIAL; COPYRIGHT") is numbered, so NUMBERED_CLAUSE reads it first.
+ */
+const CAPS_HEADING_MAX_WORDS = 6;
 
 /**
  * Reads a heading from one line, or null.
  *
- * Deliberately conservative on length: an obligation sentence ending in a colon
- * is not a heading, and treating it as one would silently drop a requirement.
+ * Deliberately conservative: an obligation sentence that happens to be
+ * numbered, lettered, capitalised or colon-terminated is not a heading, and
+ * treating it as one silently swallows a requirement into a section label.
  */
 export function detectHeading(line: string): string | null {
   if (!line.trim()) return null;
@@ -105,25 +129,23 @@ export function detectHeading(line: string): string | null {
   const numbered = NUMBERED_CLAUSE.exec(line);
   if (numbered && !/[.!?]$/.test(line.trim())) {
     const body = numbered[2]!.trim();
-    if (body.split(/\s+/).length <= HEADING_MAX_WORDS) {
-      return `${numbered[1]} ${body}`;
-    }
+    if (isLabel(body)) return `${numbered[1]} ${body}`;
   }
 
   const lettered = LETTERED_CLAUSE.exec(line);
   if (lettered && !/[.!?]$/.test(line.trim())) {
-    return `${lettered[1]}. ${lettered[2]!.trim()}`;
+    const body = lettered[2]!.trim();
+    if (isLabel(body)) return `${lettered[1]}. ${body}`;
   }
 
   const caps = CAPS_HEADING.exec(line);
-  if (caps && caps[1]!.trim().split(/\s+/).length <= HEADING_MAX_WORDS) {
-    return caps[1]!.trim();
+  if (caps) {
+    const body = caps[1]!.trim();
+    if (isLabel(body) && body.split(/\s+/).length <= CAPS_HEADING_MAX_WORDS) return body;
   }
 
   const colon = COLON_HEADING.exec(line);
-  if (colon && colon[1]!.trim().split(/\s+/).length <= HEADING_MAX_WORDS) {
-    return colon[1]!.trim();
-  }
+  if (colon && isLabel(colon[1]!.trim())) return colon[1]!.trim();
 
   return null;
 }

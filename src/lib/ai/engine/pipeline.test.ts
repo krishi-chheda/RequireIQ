@@ -4,6 +4,7 @@ import { extractFromDocument, type ExtractedConstraint, type ExtractedRequiremen
 import { analyseAmbiguity } from "./ambiguity";
 import { detectConflicts, estimateAnnualInfrastructureCost, type ConflictSubject } from "./conflict";
 import { detectCoverageGaps } from "./coverage";
+import { cleanDocumentText } from "./structure";
 
 /**
  * End-to-end assertions against the demo corpus.
@@ -94,7 +95,11 @@ describe("extraction over the demo corpus", () => {
       expect(doc, `source document for ${requirement.ref}`).toBeDefined();
       // The whole hallucination-control story: a statement in the register is a
       // statement that exists in a document, at the offsets recorded for it.
-      const slice = doc!.content.slice(
+      // Cleaned, not raw: offsets are computed against cleanDocumentText(content),
+      // which is what ingest and seed store. Cleaning is a no-op on every demo
+      // document today, so slicing the raw text passes - and would go on passing
+      // if cleaning ever moved an offset.
+      const slice = cleanDocumentText(doc!.content).slice(
         requirement.evidence.startOffset,
         requirement.evidence.endOffset,
       );

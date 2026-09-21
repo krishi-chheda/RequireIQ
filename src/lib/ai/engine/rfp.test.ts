@@ -50,6 +50,12 @@ describe("RFP success criteria", () => {
     // it as a heading swallows the first line of the clause, which is how three
     // "Contractor shall ..." obligations went missing from a real RFP.
     expect(detectHeading("4. CONTRACT REQUIREMENTS")).toBe("4 CONTRACT REQUIREMENTS");
+    // Length is not the discriminator: a nine-word heading is still a heading,
+    // and demoting it cited its whole section to the previous section number.
+    expect(detectHeading("5.19 Compliance with Federal, State, County, and Local Laws")).toBe(
+      "5.19 Compliance with Federal, State, County, and Local Laws",
+    );
+    expect(detectHeading("B. Termination for Convenience. The County may terminate this")).toBeNull();
     expect(
       detectHeading("1. General Conditions. Contractor shall procure and maintain a comprehensive"),
     ).toBeNull();

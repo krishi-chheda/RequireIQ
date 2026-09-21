@@ -68,3 +68,12 @@ for (const file of readdirSync("samples/rfp").filter((f) => f.endsWith(".pdf")))
   }
   if (coverage.missed.length > 10) console.log(`  ... and ${coverage.missed.length - 10} more`);
 }
+
+console.log(`
+===== Known gaps
+- List items under a modal-bearing stem are not extracted as individual
+  requirements. "The selected firm shall provide the following services:" is
+  registered as one obligation, but the a)/b)/c) items beneath it carry no
+  modal of their own, so each service is absent from the register. Attaching
+  list items to their stem is a feature, not a filter change; it is the next
+  phase's work.`);
