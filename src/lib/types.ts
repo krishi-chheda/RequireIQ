@@ -6,6 +6,8 @@
  * as a fact. See `Provenance` below.
  */
 
+import type { BindsOn } from "./ai/engine/binds-on";
+
 /** How a piece of information came to exist. Rendered explicitly in the UI. */
 export type Provenance =
   /** Verbatim text present in an ingested source document. */
@@ -92,6 +94,9 @@ export const SEVERITY_ORDER: Record<Severity, number> = {
   medium: 1,
   low: 0,
 };
+
+export type { BindsOn };
+export { BINDS_ON_LABEL, BINDS_ON_SHORT } from "./ai/engine/binds-on";
 
 export type DocumentKind =
   | "transcript"
@@ -189,6 +194,10 @@ export interface Requirement {
   /** True when introduced after the agreed scope baseline date. */
   postBaseline: boolean;
   qualityScore: number;
+  /** Who the obligation binds. Orthogonal to `type`. */
+  bindsOn: BindsOn;
+  /** The cue that produced `bindsOn`. Empty when the row predates the column. */
+  bindsOnEvidence: string;
   createdAt: string;
   updatedAt: string;
 }

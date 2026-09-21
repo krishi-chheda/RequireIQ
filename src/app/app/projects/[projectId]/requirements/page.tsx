@@ -12,9 +12,12 @@ import {
 } from "@/lib/queries";
 import { z } from "@/lib/validate";
 import {
+  BINDS_ON_LABEL,
+  BINDS_ON_SHORT,
   PRIORITY_LABEL,
   REQUIREMENT_TYPES,
   REQUIREMENT_TYPE_LABEL,
+  type BindsOn,
   type Priority,
   type RequirementType,
   type ReviewStatus,
@@ -41,6 +44,19 @@ export const metadata: Metadata = { title: "Requirements register" };
 const VIEWS = ["findings", "unowned", "no-acceptance", "post-baseline", "constraints"] as const;
 const STATUSES: ReviewStatus[] = ["proposed", "in_review", "needs_clarification", "approved", "rejected"];
 const PRIORITIES: Priority[] = ["must", "should", "could", "wont"];
+// Derived, not hand-listed: a new BindsOn value gets a chip and a URL filter by
+// existing, rather than by someone remembering this line.
+const BINDS_ON = Object.keys(BINDS_ON_LABEL) as BindsOn[];
+
+/**
+ * Raised from the default 980 when the Binds-on column was added.
+ *
+ * Fixed column widths that sum past the table's min-width squeeze the one
+ * flexible column instead, which is how the statement column was once crushed
+ * to 157px. Measured in the browser at this min-width, statement holds 326px -
+ * the same as it held before the column was added.
+ */
+const TABLE_MIN_WIDTH = 1084;
 
 export default async function RequirementsPage({
   params,
@@ -58,12 +74,14 @@ export default async function RequirementsPage({
   const type = z.optionalOneOf(query.type, REQUIREMENT_TYPES) as RequirementType | undefined;
   const status = z.optionalOneOf(query.status, STATUSES) as ReviewStatus | undefined;
   const priority = z.optionalOneOf(query.priority, PRIORITIES) as Priority | undefined;
+  const bindsOn = z.optionalOneOf(query.bindsOn, BINDS_ON) as BindsOn | undefined;
   const search = z.search(query.q);
 
   const filters: RequirementFilters = {
     type,
     status,
     priority,
+    bindsOn,
     search,
     hasFindings: view === "findings" || undefined,
     unowned: view === "unowned" || undefined,
@@ -102,6 +120,17 @@ export default async function RequirementsPage({
         value: t,
         label: REQUIREMENT_TYPE_LABEL[t],
         count: typeCounts.get(t),
+      })),
+    },
+    {
+      // Deliberately not defaulted to "system": nearly every demo-corpus row
+      // binds the system, so a silent default would hide records for nothing.
+      param: "bindsOn",
+      label: "Binds on",
+      options: BINDS_ON.filter((value) => all.some((r) => r.bindsOn === value)).map((value) => ({
+        value,
+        label: BINDS_ON_LABEL[value],
+        count: all.filter((r) => r.bindsOn === value).length,
       })),
     },
     {
@@ -161,12 +190,13 @@ export default async function RequirementsPage({
                 description="Clear a filter or broaden the search. The register holds every statement extracted from the ingested documents; the filters only narrow what is shown."
               />
             ) : (
-              <TableFrame>
+              <TableFrame minWidth={TABLE_MIN_WIDTH}>
                 <thead>
                   <tr>
                     <Th className="w-[84px]">Ref</Th>
                     <Th className="min-w-[320px]">Statement</Th>
                     <Th className="w-[112px]">Type</Th>
+                    <Th className="w-[104px]">Binds on</Th>
                     <Th className="w-[96px]">Priority</Th>
                     <Th className="w-[128px]">Owner</Th>
                     <Th className="w-[108px]">Confidence</Th>
@@ -206,6 +236,22 @@ export default async function RequirementsPage({
                         </Td>
                         <Td>
                           <Badge>{REQUIREMENT_TYPE_LABEL[requirement.type]}</Badge>
+                        </Td>
+                        <Td>
+                          {/*
+                            On a real RFP most rows are proposal-submission
+                            mechanics binding the bidder rather than
+                            requirements on the system, and the register is
+                            where a reviewer meets them: without this the
+                            distinction lives only in the filter and the detail
+                            page.
+                          */}
+                          <Badge
+                            tone={requirement.bindsOn === "unknown" ? "medium" : "neutral"}
+                            title={BINDS_ON_LABEL[requirement.bindsOn]}
+                          >
+                            {BINDS_ON_SHORT[requirement.bindsOn]}
+                          </Badge>
                         </Td>
                         <Td>
                           <span className="text-[12px]">{PRIORITY_LABEL[requirement.priority]}</span>

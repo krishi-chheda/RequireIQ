@@ -14,6 +14,7 @@ import { join } from "node:path";
 
 let queries: typeof import("./queries");
 let actions: typeof import("./actions");
+let reports: typeof import("./reports");
 let dir: string;
 let projectId: string;
 
@@ -22,6 +23,7 @@ beforeAll(async () => {
   process.env.REQUIREIQ_DB_PATH = join(dir, "test.db");
   queries = await import("./queries");
   actions = await import("./actions");
+  reports = await import("./reports");
   const projects = queries.listProjects();
   projectId = projects[0]!.id;
 });
@@ -57,6 +59,35 @@ describe("seed", () => {
     expect(stakeholders).toHaveLength(12);
     expect(stakeholders.map((s) => s.name)).toContain("Kenji Mori");
     expect(stakeholders.every((s) => s.email.includes("@"))).toBe(true);
+  });
+});
+
+/**
+ * The seven counts the README publishes. They were re-measured by hand on every
+ * task and by three review rounds; this pins them so a pipeline change that
+ * moves one fails here instead of quietly making the documentation wrong.
+ *
+ * Runs before the review-workflow describes below, which mutate the register.
+ */
+describe("the published demo-corpus counts", () => {
+  it("matches what README.md claims", () => {
+    expect({
+      requirements: queries.listRequirements(projectId).length,
+      constraints: queries.listConstraints(projectId).length,
+      conflicts: queries.listConflicts(projectId).length,
+      qualityFindings: queries.listProjectAmbiguities(projectId).length,
+      risks: queries.listRisks(projectId).length,
+      coverageGaps: queries.listCoverageGaps(projectId).length,
+      relationshipEdges: queries.getGraph(projectId).edges.length,
+    }).toEqual({
+      requirements: 82,
+      constraints: 6,
+      conflicts: 7,
+      qualityFindings: 95,
+      risks: 31,
+      coverageGaps: 6,
+      relationshipEdges: 59,
+    });
   });
 });
 
@@ -249,6 +280,92 @@ describe("human-in-the-loop review", () => {
     expect(findings.some((a) => a.span.toLowerCase() === "fast")).toBe(false);
   });
 
+  it("re-derives every statement-quoting field when the actor changes", () => {
+    // The failure this pins: a field that keeps quoting the old wording is not
+    // stale, it is a sentence disproved by the statement printed next to it.
+    const requirement = queries
+      .listRequirements(projectId)
+      .find((r) => r.bindsOn !== "supplier" && r.type !== "security")!;
+    expect(requirement.bindsOnEvidence).toBeTruthy();
+
+    const rewritten =
+      "The Contractor shall encrypt every stored customer credential at rest and rotate the encryption key every 90 days.";
+    actions.editRequirement(requirement.id, rewritten, "Test Reviewer");
+
+    const after = queries.getRequirement(requirement.id)!;
+    expect(after.statement).toBe(rewritten);
+    expect(after.bindsOn).toBe("supplier");
+    expect(after.bindsOnEvidence).toContain("contractor");
+    expect(after.bindsOnEvidence).not.toBe(requirement.bindsOnEvidence);
+    expect(after.type).toBe("security");
+    expect(after.classificationEvidence).toContain("encrypt");
+    expect(after.classificationEvidence).not.toBe(requirement.classificationEvidence);
+    expect(after.priority).toBe("must");
+    expect(after.rationale).toContain("90 days");
+
+    // Nothing that quotes a matched term may quote a word the statement no
+    // longer contains. (`rationale` also carries fixed rule labels such as
+    // 'Binding modal ("must"/"shall")', which name the rule rather than
+    // claiming a match, so it is asserted field by field above.)
+    const lower = rewritten.toLowerCase();
+    for (const field of [after.bindsOnEvidence ?? "", after.classificationEvidence]) {
+      for (const [, quoted] of field.matchAll(/"([a-z0-9][a-z0-9 -]*)"/gi)) {
+        expect(lower).toContain(quoted!.toLowerCase());
+      }
+    }
+  });
+
+  it("refreshes acceptance criteria that were derived from the old statement", () => {
+    // `deriveAcceptanceCriteria` returns the statement verbatim or null, so a
+    // criterion equal to the old statement is the engine's, not a reviewer's.
+    const derived = queries
+      .listRequirements(projectId)
+      .find((r) => r.acceptanceCriteria === r.statement && !r.statement.includes("10,000"))!;
+    expect(derived).toBeTruthy();
+
+    actions.editRequirement(
+      derived.id,
+      "The system must let the customer close their account from the dashboard.",
+      "Test Reviewer",
+    );
+
+    const after = queries.getRequirement(derived.id)!;
+    expect(after.acceptanceCriteria).toBeNull();
+  });
+
+  it("leaves reviewer-typed acceptance criteria alone across an edit", () => {
+    const requirement = queries
+      .listRequirements(projectId)
+      .find((r) => r.acceptanceCriteria === null && !r.statement.includes("10,000"))!;
+    actions.setAcceptanceCriteria(requirement.id, "Signed off by the operations lead.", "Test Reviewer");
+
+    actions.editRequirement(
+      requirement.id,
+      `${requirement.statement} The record must be retained for 7 years, verified by audit sampling.`,
+      "Test Reviewer",
+    );
+
+    expect(queries.getRequirement(requirement.id)!.acceptanceCriteria).toBe("Signed off by the operations lead.");
+  });
+
+  it("audits the old and new priority when re-derivation moves it", () => {
+    const mustRequirement = queries
+      .listRequirements(projectId, { priority: "must" })
+      .find((r) => !r.statement.includes("10,000"))!;
+
+    actions.editRequirement(
+      mustRequirement.id,
+      "The platform should offer the customer a downloadable account summary.",
+      "Test Reviewer",
+    );
+
+    const after = queries.getRequirement(mustRequirement.id)!;
+    expect(after.priority).toBe("should");
+
+    const detail = queries.listAuditTrail("requirement", mustRequirement.id).at(-1)!.detail;
+    expect(detail).toContain('Priority "must" to "should"');
+  });
+
   it("resolves a conflict and records the resolution note", () => {
     const conflict = queries.listConflicts(projectId).find((c) => c.status === "open")!;
 
@@ -300,5 +417,18 @@ describe("assistant grounding", () => {
     expect(answer.grounded).toBe(true);
     expect(answer.answer).toContain(capacity.ref);
     expect(answer.citations.some((c) => c.ref === capacity.ref)).toBe(true);
+  });
+});
+
+describe("bindsOn filtering", () => {
+  it("filters the register by who the obligation binds", () => {
+    const system = queries.listRequirements(projectId, { bindsOn: "system" });
+    expect(system.length).toBeGreaterThan(0);
+    expect(system.every((r) => r.bindsOn === "system")).toBe(true);
+  });
+
+  it("exports bindsOn in the register report, so a client can see the split", () => {
+    const csv = reports.buildReport(projectId, "register")!.csv;
+    expect(csv).toContain("Binds on");
   });
 });

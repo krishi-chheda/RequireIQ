@@ -1,11 +1,13 @@
 import "server-only";
 
 import { openDb, setMeta, transaction } from "./connection";
+import { LATEST_SCHEMA_VERSION } from "./migrations";
 import { DEMO_CORPUS } from "@/lib/demo/corpus";
 import { localProvider } from "@/lib/ai/local";
 import { analyseAmbiguity, qualityScore } from "@/lib/ai/engine/ambiguity";
 import { inferRelationships } from "@/lib/ai/engine/coverage";
 import { chunkDocument } from "@/lib/ai/engine/text";
+import { cleanDocumentText } from "@/lib/ai/engine/structure";
 import type { ConflictSubject } from "@/lib/ai/engine/conflict";
 import type {
   DocumentKind,
@@ -103,9 +105,14 @@ export function seedDatabase(): void {
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     );
 
+    // Clean once here so every downstream use - the stored document row, the
+    // chunk offsets and the extraction pass - agrees on the same text. Task 5
+    // made the chunker clean before computing offsets; storing raw text here
+    // would leave the demo's own citations pointing a few characters off.
     const documents = DEMO_CORPUS.map((doc, i) => ({
       ...doc,
       id: `doc_${String(i + 1).padStart(2, "0")}`,
+      content: cleanDocumentText(doc.content),
     }));
 
     const chunkIdByDocOrdinal = new Map<string, string>();
@@ -143,8 +150,8 @@ export function seedDatabase(): void {
     const insertRequirement = db.prepare(
       `INSERT INTO requirements (id, project_id, ref, statement, original_statement, type, priority, status,
         provenance, confidence, rationale, classification_evidence, owner_stakeholder_id, acceptance_criteria,
-        post_baseline, quality_score, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        post_baseline, quality_score, binds_on, binds_on_evidence, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     const insertConstraint = db.prepare(
       `INSERT INTO constraints_tbl (id, project_id, ref, statement, category, value, unit, owner_stakeholder_id, provenance, created_at)
@@ -224,6 +231,8 @@ export function seedDatabase(): void {
           extracted.acceptanceCriteria,
           postBaseline ? 1 : 0,
           qualityScore(findings),
+          extracted.bindsOn,
+          extracted.bindsOnEvidence,
           tick(),
           tick(),
         );
@@ -592,7 +601,7 @@ export function seedDatabase(): void {
     );
 
     setMeta("seeded_at", new Date().toISOString());
-    setMeta("schema_version", "1");
+    setMeta("schema_version", String(LATEST_SCHEMA_VERSION));
     setMeta("demo_project_id", PROJECT_ID);
   });
 }

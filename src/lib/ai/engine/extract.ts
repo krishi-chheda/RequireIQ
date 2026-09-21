@@ -1,4 +1,5 @@
 import type { Constraint, Priority, RequirementType } from "@/lib/types";
+import { AGENT_SUBJECT, classifyBindsOn, type BindsOn } from "./binds-on";
 import { classifyPriority, classifyRequirement } from "./classify";
 import {
   boundDirection,
@@ -55,6 +56,8 @@ export interface ExtractedRequirement {
   evidence: ExtractedEvidence;
   /** Text the extractor believes states how the requirement is verified. */
   acceptanceCriteria: string | null;
+  bindsOn: BindsOn;
+  bindsOnEvidence: string;
 }
 
 export interface ExtractedConstraint {
@@ -70,18 +73,86 @@ export interface ExtractionResult {
   requirements: ExtractedRequirement[];
   constraints: ExtractedConstraint[];
   /** Sentences that looked obligation-like but were rejected, with the reason. */
-  rejected: Array<{ sentence: string; reason: string }>;
+  rejected: Array<{ sentence: string; reason: string; kind: RejectionKind }>;
 }
 
-/** Modal patterns that mark an obligation, with how binding each one is. */
-const OBLIGATION_PATTERNS: Array<{ re: RegExp; strength: number; label: string }> = [
+/**
+ * Modal patterns that mark an obligation, with how binding each one is.
+ *
+ * `guard` is an extra predicate for a pattern whose regex alone cannot be made
+ * precise enough; a pattern without one is decided by its regex.
+ */
+const OBLIGATION_PATTERNS: Array<{
+  re: RegExp;
+  strength: number;
+  label: string;
+  guard?: (statement: string) => boolean;
+}> = [
   { re: /\b(must not|shall not|may not)\b/i, strength: 1.0, label: "prohibitive modal" },
   { re: /\b(must|shall)\b/i, strength: 1.0, label: "binding modal" },
   { re: /\b(is required to|are required to|is mandated|requires a|requires an)\b/i, strength: 0.9, label: "requirement phrasing" },
   { re: /\b(has to|have to|needs to|need to)\b/i, strength: 0.7, label: "informal obligation" },
   { re: /\b(should|ought to)\b/i, strength: 0.6, label: "recommendation modal" },
   { re: /\b(will be able to|can be)\b/i, strength: 0.3, label: "capability phrasing" },
+  // A buyer commits with "will", not "shall": "The City will provide test data
+  // within ten working days of contract award" is a real obligation on the
+  // acquiring party (ISO 29148 reads "will" as a statement of intent), and
+  // without this the register captures only the obligations pointing at the
+  // supplier. Anchored at the sentence subject on purpose - a bare /\bwill\b/
+  // also swallows narrative consequence ("the two documents will appear to
+  // disagree", "we will be running two origination systems"), which measured
+  // as 2 extra non-obligations over the demo corpus.
+  //
+  // The anchor alone is close to vacuous, though: any subject of three words or
+  // fewer satisfies it, which is most English prose. Measured over two real
+  // RFPs it admitted narrative and as-is description ("A final budget will be
+  // programmed based on the results of this RFP", "Demonstrations will be used
+  // to evaluate the usability") alongside the genuine commitments. `guard`
+  // narrows it to a subject that names an actor, reusing the binds-on
+  // vocabulary rather than keeping a second copy of the same list.
+  {
+    re: /^[A-Z][A-Za-z'-]*(?:\s+[A-Za-z][A-Za-z'-]*){0,2}\s+will\s+(?:not\s+)?[a-z]/,
+    strength: 0.5,
+    label: "commitment modal",
+    guard: hasActorSubject,
+  },
 ];
+
+/** The subject of a commitment-modal sentence: everything before "will". */
+const COMMITMENT_SUBJECT = /^(.*?)\s+will\s+(?:not\s+)?[a-z]/;
+
+/**
+ * "will be <regular past participle>" - a commitment in the passive voice.
+ *
+ * `AGENT_SUBJECT` alone asks who acts, and the passive deliberately does not
+ * say; requiring a named actor dropped six Santa Fe commitments, four of them
+ * genuine buyer obligations carrying no shall/must, so the coverage metric
+ * never flagged them ("Proposals will be evaluated based upon a comparison of
+ * each Offeror's demonstrated ability ...", "All proposals will be reviewed for
+ * compliance with the mandatory specifications ...", "Proposals deemed
+ * non-responsive will be eliminated from further consideration.", "Responsive
+ * proposals will be evaluated using the factors in Section V."). An obligation
+ * stands whoever performs it, and where nobody is identifiable `classifyBindsOn`
+ * answers `unknown`, which surfaces for review rather than discarding it.
+ *
+ * Regular participles only, which is what keeps the two announcements out: "A
+ * Pre-Proposal Conference will be held ..." is irregular and "Request for
+ * Proposals will be available ..." is an adjective. Measured, that separates
+ * all six with no special case - the ceiling is an irregular passive
+ * ("undertaken", "withdrawn"), which would be missed, not misread.
+ */
+const PASSIVE_COMMITMENT = /\bwill\s+(?:not\s+)?be\s+\w+ed\b/i;
+
+function hasActorSubject(statement: string): boolean {
+  if (PASSIVE_COMMITMENT.test(statement)) return true;
+  const subject = COMMITMENT_SUBJECT.exec(statement)?.[1]?.toLowerCase();
+  return subject !== undefined && AGENT_SUBJECT.test(subject);
+}
+
+/** The first obligation pattern the statement satisfies, guard included. */
+function findObligation(statement: string) {
+  return OBLIGATION_PATTERNS.find((p) => p.re.test(statement) && (!p.guard || p.guard(statement)));
+}
 
 /**
  * Domain nouns. At least one must appear, otherwise the sentence is
@@ -95,7 +166,55 @@ const DOMAIN_NOUNS = [
   "api", "session", "vendor", "dashboard", "report", "alert", "spend",
   "infrastructure", "licence", "budget", "team", "colleague", "analyst",
   "underwriter", "adviser", "channel", "test", "image", "token", "key",
+  "offeror", "respondent", "proposer", "bidder", "tenderer", "contractor",
+  // "contract" alone is the only domain noun in force majeure, severability,
+  // governing-law, venue, standard-of-performance, audit-recovery and
+  // contract-form boilerplate - 11 such clauses over the two sample RFPs, 0 in
+  // the demo corpus. The narrower pair still admits the budget constraint
+  // ("Total contract value must not exceed ...") without them, and
+  // "contractor"/"subcontractor" remain entries in their own right.
+  "proposal", "bid", "submission", "contract value", "total contract",
+  "solicitation", "awardee", "subcontractor", "firm",
 ];
+
+/**
+ * "bid" and "firm" are short enough to appear inside unrelated words -
+ * "confirm", "affirm", "firmware", "forbid", "bidirectional" - under plain
+ * substring matching. Measured: switching the *whole* list to word-boundary
+ * matching is more correct but is not free - it drops RFP yield (144 vs 146
+ * over the two sample PDFs) because several entries rely on a mid-word hit
+ * for an inflection substring matching also happens to allow. So only these
+ * two get the stricter, whole-word check (singular or plural: "bid", "bids",
+ * "firm", "firms"); everything else keeps plain substring matching, unchanged.
+ * Longer entries such as "bidder" are separate DOMAIN_NOUNS entries and still
+ * match by substring.
+ */
+const AMBIGUOUS_DOMAIN_NOUNS = new Set(["bid", "firm"]);
+const AMBIGUOUS_DOMAIN_NOUN_RE = new RegExp(
+  `\\b(?:${[...AMBIGUOUS_DOMAIN_NOUNS].map((noun) => `${noun}s?`).join("|")})\\b`,
+  "i",
+);
+
+function hasDomainNoun(statement: string, lower: string): boolean {
+  const plain = DOMAIN_NOUNS.some(
+    (noun) => !AMBIGUOUS_DOMAIN_NOUNS.has(noun) && lower.includes(noun),
+  );
+  return plain || AMBIGUOUS_DOMAIN_NOUN_RE.test(statement);
+}
+
+/**
+ * Why a sentence carrying a modal was not registered.
+ *
+ * A structural kind, not the prose: the P1 coverage metric has to ask "was this
+ * rejected on vocabulary?", and comparing a displayed sentence against one
+ * exact string means any new or reworded reason silently scores as covered.
+ *
+ * META_MARKERS is "vocabulary" as well: it is a word list under a different
+ * label, and rejecting on it is the same judgement as rejecting on DOMAIN_NOUNS.
+ */
+export type RejectionKind = "vocabulary" | "interrogative";
+
+const VOCABULARY_REJECTION = "No domain subject - conversational rather than buildable.";
 
 /** Sentences containing these are explicitly not requirements. */
 const META_MARKERS = [
@@ -107,8 +226,16 @@ const META_MARKERS = [
   "i would come back", "distribution:", "next steps",
 ];
 
-/** Hedges that reduce confidence because the speaker is not committing. */
-const HEDGES = ["i think", "probably", "possibly", "maybe", "roughly", "i would say", "something like", "or so"];
+/**
+ * Hedges that reduce confidence because the speaker is not committing.
+ *
+ * "or so" is the one entry short enough to land inside an unrelated phrase -
+ * "an account for someone" contains it, and measured over the demo corpus that
+ * was docking a firmly-stated requirement 0.15 of confidence for a hedge
+ * nobody made. It is matched as whole words; the rest are unambiguous.
+ */
+const HEDGES = ["i think", "probably", "possibly", "maybe", "roughly", "i would say", "something like"];
+const OR_SO = /\bor so\b/i;
 
 const CONSTRAINT_NOUNS = [
   "budget", "spend", "envelope", "threshold", "cap", "not exceed", "no more than",
@@ -132,92 +259,207 @@ const ACCEPTANCE_CUES = [
   "within", "at least", "no more than", "percentile", "excluding",
 ];
 
-export function extractFromDocument(input: ExtractionInput): ExtractionResult {
-  const requirements: ExtractedRequirement[] = [];
-  const constraints: ExtractedConstraint[] = [];
-  const rejected: Array<{ sentence: string; reason: string }> = [];
-  const seen = new Set<string>();
+/** A sentence of the document, as the extractor sees it. */
+interface Candidate {
+  chunk: Chunk;
+  /** Sentence text with any list marker removed and whitespace collapsed. */
+  statement: string;
+  /**
+   * Offsets of `statement` within the *cleaned* document. They start after the
+   * list marker, not at it: the marker is normalised out of the stored
+   * statement, so an offset pointing at it would break the register's contract
+   * that the recorded range quotes the statement back verbatim.
+   */
+  start: number;
+  end: number;
+}
 
-  for (const chunk of chunkDocument(input.content)) {
-    const speakerId = resolveStakeholder(chunk, input);
+/**
+ * Every sentence the extractor considers, in document order.
+ *
+ * Shared with `obligationCoverage` so the success metric is measured over
+ * exactly the sentences extraction saw, not a second, differently-segmented
+ * reading of the same document.
+ */
+function* candidateStatements(content: string): Generator<Candidate> {
+  for (const chunk of chunkDocument(content)) {
     const body = stripSpeakerPrefix(chunk.text);
     const bodyOffset = chunk.start + (chunk.text.length - body.length);
 
     for (const sentence of splitSentences(body, bodyOffset)) {
-      const statement = normaliseWhitespace(stripListMarker(sentence.text));
-      if (statement.length < 20 || statement.length > 400) continue;
-
-      const obligation = OBLIGATION_PATTERNS.find((p) => p.re.test(statement));
-      if (!obligation) continue;
-
-      const lower = statement.toLowerCase();
-      if (statement.includes("?")) {
-        rejected.push({ sentence: statement, reason: "Interrogative - a question, not an obligation." });
-        continue;
-      }
-      const meta = META_MARKERS.find((marker) => lower.includes(marker));
-      if (meta) {
-        rejected.push({ sentence: statement, reason: `Facilitation or process note (matched "${meta}").` });
-        continue;
-      }
-      if (!DOMAIN_NOUNS.some((noun) => lower.includes(noun))) {
-        rejected.push({ sentence: statement, reason: "No domain subject - conversational rather than buildable." });
-        continue;
-      }
-
-      const dedupeKey = lower.replace(/[^a-z0-9]/g, "");
-      if (seen.has(dedupeKey)) continue;
-      seen.add(dedupeKey);
-
-      const evidence: ExtractedEvidence = {
-        documentId: input.documentId,
-        chunkOrdinal: chunk.ordinal,
-        locator: chunk.locator,
-        quote: statement,
-        startOffset: sentence.start,
-        endOffset: sentence.end,
-        stakeholderId: speakerId,
+      const stripped = stripListMarker(sentence.text);
+      yield {
+        chunk,
+        statement: normaliseWhitespace(stripped),
+        start: sentence.start + (sentence.text.length - stripped.length),
+        end: sentence.end,
       };
-
-      if (looksLikeConstraint(statement)) {
-        constraints.push(buildConstraint(statement, evidence, speakerId));
-        continue;
-      }
-
-      requirements.push(buildRequirement(statement, obligation, evidence, speakerId, input.kind));
     }
+  }
+}
+
+/** Dedupe/identity key for a statement: letters and digits only. */
+function statementKey(statement: string): string {
+  return statement.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+export function extractFromDocument(input: ExtractionInput): ExtractionResult {
+  const requirements: ExtractedRequirement[] = [];
+  const constraints: ExtractedConstraint[] = [];
+  const rejected: ExtractionResult["rejected"] = [];
+  const seen = new Set<string>();
+
+  for (const candidate of candidateStatements(input.content)) {
+    const { chunk, statement } = candidate;
+    const speakerId = resolveStakeholder(chunk, input);
+    if (statement.length < 20 || statement.length > 400) continue;
+
+    const obligation = findObligation(statement);
+    if (!obligation) continue;
+
+    const lower = statement.toLowerCase();
+    if (statement.includes("?")) {
+      rejected.push({
+        sentence: statement,
+        reason: "Interrogative - a question, not an obligation.",
+        kind: "interrogative",
+      });
+      continue;
+    }
+    const meta = META_MARKERS.find((marker) => lower.includes(marker));
+    if (meta) {
+      rejected.push({
+        sentence: statement,
+        reason: `Facilitation or process note (matched "${meta}").`,
+        kind: "vocabulary",
+      });
+      continue;
+    }
+    if (!hasDomainNoun(statement, lower)) {
+      rejected.push({ sentence: statement, reason: VOCABULARY_REJECTION, kind: "vocabulary" });
+      continue;
+    }
+
+    const dedupeKey = statementKey(statement);
+    if (seen.has(dedupeKey)) continue;
+    seen.add(dedupeKey);
+
+    const evidence: ExtractedEvidence = {
+      documentId: input.documentId,
+      chunkOrdinal: chunk.ordinal,
+      locator: chunk.locator,
+      quote: statement,
+      startOffset: candidate.start,
+      endOffset: candidate.end,
+      stakeholderId: speakerId,
+    };
+
+    if (looksLikeConstraint(statement)) {
+      constraints.push(buildConstraint(statement, evidence, speakerId));
+      continue;
+    }
+
+    // classifyBindsOn (inside describeStatement) never gates extraction -
+    // `unknown` is an honest outcome that surfaces for review, not a reason
+    // to discard a real obligation (see
+    // docs/superpowers/specs/2026-09-16-rfp-ingestion-p1-design.md).
+    requirements.push(buildRequirement(statement, evidence, speakerId, input.kind));
   }
 
   return { requirements, constraints, rejected };
 }
 
-function buildRequirement(
-  statement: string,
-  obligation: { strength: number; label: string },
-  evidence: ExtractedEvidence,
-  ownerStakeholderId: string | null,
-  kind: string,
-): ExtractedRequirement {
+/** Sentences carrying the two binding modals the P1 criterion is stated over. */
+const SHALL_MUST = /\b(?:shall|must)\b/i;
+
+export interface ObligationCoverage {
+  /** Distinct shall/must sentences in the document. */
+  total: number;
+  /** Of those, how many were extracted or rejected for a non-vocabulary reason. */
+  covered: number;
+  /** The rest, verbatim, so a probe can print what the extractor walked past. */
+  missed: string[];
+}
+
+/**
+ * The P1 success criterion, measured per sentence.
+ *
+ * The spec asks that every shall/must sentence is either extracted or rejected
+ * for a reason other than vocabulary. That is a coverage question about a set of
+ * sentences, not a ratio of two counts: dividing "things captured" by "times
+ * 'shall' appears" says nothing about whether the things captured are the
+ * shall/must sentences, and measured over real documents it exceeded 100%.
+ *
+ * Known blind spot, deliberately not papered over: `total` is counted from
+ * `candidateStatements`, which runs downstream of `chunkDocument`. A sentence
+ * mistaken for a heading is dropped from both sides of the ratio, so this
+ * metric cannot see that class of loss and would score it as perfect coverage.
+ * It stays latent because `isLabel` forbids a whole shall/must line from
+ * becoming a heading and no requirement statement in either sample RFP starts
+ * lower-case; the fix is to count over the raw text, which is a separate piece
+ * of work. Heading regressions are measured directly instead.
+ */
+export function obligationCoverage(content: string, result: ExtractionResult): ObligationCoverage {
+  const accounted = new Set<string>();
+  for (const requirement of result.requirements) accounted.add(statementKey(requirement.statement));
+  for (const constraint of result.constraints) accounted.add(statementKey(constraint.statement));
+  for (const { sentence, kind } of result.rejected) {
+    if (kind !== "vocabulary") accounted.add(statementKey(sentence));
+  }
+
+  const seen = new Set<string>();
+  const missed: string[] = [];
+  let total = 0;
+  for (const { statement } of candidateStatements(content)) {
+    if (!SHALL_MUST.test(statement)) continue;
+    const key = statementKey(statement);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    total += 1;
+    if (!accounted.has(key)) missed.push(statement);
+  }
+
+  return { total, covered: total - missed.length, missed };
+}
+
+/**
+ * Everything a requirement row stores that is read out of the statement text.
+ *
+ * Both writers of a requirement go through here - the extractor at ingest, and
+ * `editRequirement` after a human rewrite - so no stored field can go on
+ * quoting words the current statement no longer contains. Adding a derived
+ * field here is what makes it survive an edit; adding it at a call site is not.
+ */
+export interface StatementDescription {
+  type: RequirementType;
+  priority: Priority;
+  rationale: string;
+  classificationEvidence: string;
+  bindsOn: BindsOn;
+  bindsOnEvidence: string;
+  acceptanceCriteria: string | null;
+  /** Reading-confidence inputs. Only the extractor scores them, at ingest. */
+  obligationStrength: number;
+  classificationMargin: number;
+  quantityCount: number;
+  hedged: boolean;
+}
+
+export function describeStatement(statement: string): StatementDescription {
+  const lower = statement.toLowerCase();
+  const obligation = findObligation(statement);
   const classification = classifyRequirement(statement);
   const { priority, evidence: priorityEvidence } = classifyPriority(statement);
   const quantities = extractQuantities(statement);
-  const lower = statement.toLowerCase();
-
-  // Confidence is a reading confidence: how sure the extractor is that this
-  // sentence is a requirement and was read correctly. It is NOT a claim about
-  // whether the requirement is a good idea.
-  let confidence = 0.5 + obligation.strength * 0.25;
-  if (quantities.length > 0) confidence += 0.08;
-  if (ownerStakeholderId) confidence += 0.06;
-  confidence += KIND_WEIGHT[kind] ?? 0;
-  confidence += classification.margin * 0.08;
-  const hedge = HEDGES.find((h) => lower.includes(h));
-  if (hedge) confidence -= 0.15;
-  if (statement.length > 240) confidence -= 0.05;
-  confidence = Math.max(0.35, Math.min(0.98, confidence));
+  const binding = classifyBindsOn(statement);
+  // A human can rewrite a statement into one with no modal at all; the
+  // extractor never reaches here without one.
+  const hedge = HEDGES.find((h) => lower.includes(h)) ?? (OR_SO.test(statement) ? "or so" : undefined);
 
   const reasons = [
-    `Detected ${obligation.label} in source sentence`,
+    obligation
+      ? `Statement carries a ${obligation.label}`
+      : "No obligation modal found in the statement",
     priorityEvidence,
     quantities.length
       ? `Carries ${quantities.length} measurable quantity value${quantities.length === 1 ? "" : "s"} (${quantities
@@ -226,18 +468,57 @@ function buildRequirement(
           .join(", ")})`
       : "No measurable quantity found in the statement",
     hedge ? `Confidence reduced: speaker hedged with "${hedge}"` : null,
-  ].filter(Boolean);
+  ].filter((reason): reason is string => Boolean(reason));
+
+  return {
+    type: classification.type,
+    priority,
+    // Some reasons (priority evidence) already end in a full stop, so strip it
+    // before joining rather than emitting "...priority.. Carries...".
+    rationale: `${reasons.map((reason) => reason.replace(/\.+$/, "")).join(". ")}.`,
+    classificationEvidence: classification.evidence,
+    bindsOn: binding.bindsOn,
+    bindsOnEvidence: binding.evidence,
+    acceptanceCriteria: deriveAcceptanceCriteria(statement, quantities.length > 0),
+    obligationStrength: obligation?.strength ?? 0,
+    classificationMargin: classification.margin,
+    quantityCount: quantities.length,
+    hedged: Boolean(hedge),
+  };
+}
+
+function buildRequirement(
+  statement: string,
+  evidence: ExtractedEvidence,
+  ownerStakeholderId: string | null,
+  kind: string,
+): ExtractedRequirement {
+  const described = describeStatement(statement);
+
+  // Confidence is a reading confidence: how sure the extractor is that this
+  // sentence is a requirement and was read correctly. It is NOT a claim about
+  // whether the requirement is a good idea.
+  let confidence = 0.5 + described.obligationStrength * 0.25;
+  if (described.quantityCount > 0) confidence += 0.08;
+  if (ownerStakeholderId) confidence += 0.06;
+  confidence += KIND_WEIGHT[kind] ?? 0;
+  confidence += described.classificationMargin * 0.08;
+  if (described.hedged) confidence -= 0.15;
+  if (statement.length > 240) confidence -= 0.05;
+  confidence = Math.max(0.35, Math.min(0.98, confidence));
 
   return {
     statement,
-    type: classification.type,
-    priority,
+    type: described.type,
+    priority: described.priority,
     confidence: Number(confidence.toFixed(2)),
-    rationale: `${reasons.join(". ")}.`,
-    classificationEvidence: classification.evidence,
+    rationale: described.rationale,
+    classificationEvidence: described.classificationEvidence,
     ownerStakeholderId,
     evidence,
-    acceptanceCriteria: deriveAcceptanceCriteria(statement, quantities.length > 0),
+    acceptanceCriteria: described.acceptanceCriteria,
+    bindsOn: described.bindsOn,
+    bindsOnEvidence: described.bindsOnEvidence,
   };
 }
 
@@ -296,8 +577,17 @@ function looksLikeConstraint(statement: string): boolean {
   return /\bbudget\b|\benvelope\b|\bcapital request\b/.test(lower) && quantities.length > 0;
 }
 
+/**
+ * A single letter counts as a marker ("B. The Contractor must submit ...") as
+ * well as a bullet or a number. Contract boilerplate is lettered, and once the
+ * heading rule stopped mistaking those clauses for section labels the marker
+ * came through into the statement instead. Measured over both real RFPs, the
+ * fixture and the demo corpus by comparing each recorded start offset against
+ * its line start, it strips 9 genuine letter markers and nothing else - no
+ * initial ("J. Smith") reaches a sentence start in any of them.
+ */
 function stripListMarker(text: string): string {
-  return text.replace(/^\s*(?:[-*+]|\d+[.)])\s+/, "");
+  return text.replace(/^\s*(?:[-*+]|\d+[.)]|[A-Za-z][.)])\s+/, "");
 }
 
 /**

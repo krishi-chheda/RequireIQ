@@ -8,6 +8,8 @@
  * paraphrase it.
  */
 
+import { cleanDocumentText, detectHeading, isTranscript } from "./structure";
+
 export interface Sentence {
   text: string;
   /** Offset of the first character of `text` within the document. */
@@ -31,6 +33,11 @@ export interface Chunk {
 const ABBREVIATIONS = new Set([
   "mr", "mrs", "ms", "dr", "prof", "sr", "jr", "st", "no", "vs", "etc", "eg",
   "ie", "approx", "dept", "inc", "ltd", "plc", "co", "fig", "al",
+  // "Sec. 5" is a cross-reference, not a sentence end. It appears nowhere in
+  // the sample RFPs, the fixture or the demo corpus, so this costs nothing
+  // there; it is here because `detectHeading` now asks this splitter whether a
+  // clause title is one sentence, and "2. Sec. 5 Compliance" is one.
+  "sec",
 ]);
 
 /**
@@ -120,7 +127,12 @@ const EMAIL_HEADER = /^(From|To|Cc|Date|Subject):\s*(.*)$/i;
  */
 export function chunkDocument(content: string): Chunk[] {
   const chunks: Chunk[] = [];
-  const lines = content.split("\n");
+  const cleaned = cleanDocumentText(content);
+  const lines = cleaned.split("\n");
+
+  // Speaker attribution is a document-level decision. Applying the per-line
+  // pattern to an RFP invents speakers out of form labels.
+  const transcript = isTranscript(lines);
 
   let currentHeading = "Preamble";
   let buffer: string[] = [];
@@ -152,16 +164,18 @@ export function chunkDocument(content: string): Chunk[] {
     const lineStart = offset;
     offset += line.length + 1;
 
-    const heading = HEADING.exec(line);
-    if (heading) {
+    const markdownHeading = HEADING.exec(line);
+    const plainHeading = markdownHeading ? null : detectHeading(line);
+    if (markdownHeading || plainHeading) {
       flush();
-      currentHeading = (heading[2] ?? "").trim() || currentHeading;
+      currentHeading =
+        (markdownHeading ? (markdownHeading[2] ?? "").trim() : plainHeading!) || currentHeading;
       inHeaderBlock = false;
       bufferStart = offset;
       continue;
     }
 
-    const turn = SPEAKER_TURN.exec(line);
+    const turn = transcript ? SPEAKER_TURN.exec(line) : null;
     if (turn && turn[1]) {
       flush();
       const name = turn[1].trim();
@@ -305,8 +319,19 @@ export function extractQuantities(text: string): Quantity[] {
   const found: Quantity[] = [];
   const seen = new Set<number>();
 
+  /**
+   * A number inside a hyphenated alphanumeric token is a name, not a measure:
+   * AES-256, SHA-256, ISO-8601, UTF-8, and the statute citations real RFPs are
+   * full of ("NMSA 1978, Section 13-1-116"). Guarded here rather than in one
+   * pattern because every caller of `extractQuantities` inherits the reading -
+   * the ingest confidence bonus, the conflict detectors, and the rationale
+   * `editRequirement` re-derives and writes into the audit trail.
+   */
+  const named = (start: number): boolean =>
+    text[start - 1] === "-" && /[A-Za-z0-9]/.test(text[start - 2] ?? "");
+
   const push = (q: Quantity): void => {
-    if (seen.has(q.start)) return;
+    if (seen.has(q.start) || named(q.start)) return;
     seen.add(q.start);
     found.push(q);
   };

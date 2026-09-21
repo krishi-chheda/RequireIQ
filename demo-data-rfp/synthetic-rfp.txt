@@ -1,0 +1,66 @@
+CITY OF NORTHAM
+Request for Proposals 2026-014
+Page 1 of 3
+
+1. INTRODUCTION
+
+The City of Northam seeks proposals for a permit management platform.
+
+2. SUBMISSION REQUIREMENTS
+
+2.1 Timing
+
+All proposals must be submitted by 2:00PM on Friday 12 June 2026.
+
+It shall be the Respondent's sole risk to assure submission by the designated time.
+
+2.2 Eligibility
+
+The offeror must be registered and licensed to do business in the State.
+
+CITY OF NORTHAM
+Request for Proposals 2026-014
+Page 2 of 3
+
+3. SOLUTION REQUIREMENTS
+
+3.1 Functional
+
+� The solution shall allow an applicant to submit a permit application online.
+
+� The solution shall provide role-based access control for all staff users.
+
+3.2 Performance
+
+The solution shall support 2,000 concurrent users at peak load.
+
+The system must return 95% of page responses within 800 milliseconds.
+
+3.3 Availability
+
+The platform shall achieve 99.9% availability measured monthly.
+
+The recovery time objective must be under 8 hours for full service restoration.
+
+CITY OF NORTHAM
+Request for Proposals 2026-014
+Page 3 of 3
+
+4. CONTRACT REQUIREMENTS
+
+Contractor shall submit evidence of insurance as is required herein.
+
+The successful Offeror shall provide training for up to forty staff users.
+
+4.1 Insurance
+
+1. General Conditions. Contractor shall procure and maintain a comprehensive
+general liability policy for the life of this Agreement.
+
+5. CITY OBLIGATIONS
+
+The City will provide test data within ten working days of contract award.
+
+6. BUDGET
+
+Total contract value must not exceed $150,000 over the initial term.

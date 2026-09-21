@@ -22,17 +22,26 @@ document: [`analysis-engine.md`](analysis-engine.md).
             │  queries.ts         read model               │
             │  actions.ts         write model              │
             │  ingest.ts          upload pipeline          │
+            │  pdf.ts             PDF bytes → text         │
             │  reports.ts         deliverables             │
             ├──────────────────────────────────────────────┤
             │  ai/index.ts        provider resolution      │
             │  ai/local.ts        deterministic engine     │
             │  ai/anthropic.ts    optional hosted model    │
+            │  ai/engine/structure.ts  furniture, headings,│
+            │                          transcript decision │
             │  ai/engine/*        pure analysis functions  │
             ├──────────────────────────────────────────────┤
             │  db/connection.ts   node:sqlite              │
+            │  db/migrations.ts   ordered, append-only     │
             │  db/seed.ts         demo engagement          │
             └──────────────────────────────────────────────┘
 ```
+
+`pdf.ts` sits beside `ingest.ts` rather than under it: it holds no server
+resource, so the probe script can import it from plain Node, and the parser
+(`unpdf`) is swappable without touching the pipeline. It is the only module in
+the codebase that knows a PDF exists.
 
 Dependencies point downward only. `ai/engine/*` imports nothing from the data
 layer, which is what makes it testable without a database and reusable on an
@@ -46,7 +55,7 @@ uploaded document.
 server. There is no API layer between a page and its data, and no client-side
 data fetching, so there is no loading waterfall and no cache to invalidate.
 
-Cost: 103 kB shared JS, per-page 180 B – 2.7 kB.
+Cost: 103 kB shared JS, per-page 134 B – 2.73 kB.
 
 **Twelve client components**, each for a reason that cannot be met on the server:
 
@@ -66,7 +75,7 @@ Cost: 103 kB shared JS, per-page 180 B – 2.7 kB.
 | `error.tsx` | Error boundaries must be client components |
 
 **Register filter state lives in the URL, not in a component.** Every filtered
-view is therefore linkable — *"here are the twelve requirements with no owner"*
+view is therefore linkable — *"here are the requirements with no owner"*
 is a link a consultant can paste into an email — and the back button behaves.
 
 ---
@@ -96,9 +105,21 @@ Revalidating the whole project subtree — rather than one path — is deliberat
 register, the dashboard counts and the sidebar badges all read the same figures,
 and they must never show three different versions of the same number.
 
-Editing a requirement **re-runs quality analysis** against the new wording, so a
-genuine fix visibly clears its own findings. The original statement is preserved
-so the scope-movement view can show the before and after.
+Editing a requirement **re-derives every stored field that quotes the
+statement** — type, priority, rationale, classification evidence, `bindsOn` and
+its evidence — and re-runs quality analysis against the new wording, so a
+genuine fix visibly clears its own findings. A field left behind does not merely
+age: it quotes words that are no longer on the page, next to the text that
+disproves it. Re-derivation moves counts the dashboard reads, so every derived
+field that actually changed is named in the audit event. The original statement
+is preserved so the scope-movement view can show the before and after.
+
+**One field is deliberately excluded.** `acceptance_criteria` has no per-field
+provenance column, and `deriveAcceptanceCriteria` only ever returns the
+statement verbatim or null — so a value equal to the *old* statement is a
+derived one and is refreshed, and anything else was typed by a reviewer and is
+left alone. A reviewer's acceptance criteria therefore survive an edit, at the
+cost of not being refreshed when they were the thing that went stale.
 
 Resolving a conflict **cascades to the risk it generated**, so the conflict queue
 and the risk register cannot drift apart.
@@ -107,9 +128,26 @@ and the risk register cannot drift apart.
 
 ## Persistence
 
-`node:sqlite`, the Node 22+ builtin. No native module, no database server, no
+`node:sqlite`, the Node 22.13+ builtin. No native module, no database server, no
 ORM, no migration tool. The entire persistence story is one file on disk, which
 is what makes the product demo-able from a clean clone.
+
+**Migrations (`db/migrations.ts`).** The schema is applied with
+`CREATE TABLE IF NOT EXISTS`, which cannot add a column to a table that already
+exists — so schema changes go through an ordered list, and it arrived with the
+first one rather than after it. `meta.schema_version` records how far a database
+has got.
+
+The list is **append only. An existing entry is never edited or renumbered**,
+because the version stamped in somebody's database refers to a position in it;
+renumbering silently re-runs or skips migrations on every database in the world
+that is not this one. Each entry carries a `skipIf` predicate — "does this
+column already exist?" — rather than matching an error string, so a fresh
+database that the schema already satisfies skips the statement while any real
+error still rolls the whole batch back. Pending migrations and the version stamp
+apply as one transaction, opened directly rather than through `transaction()`:
+`runMigrations` runs from inside `openDb()`, before the module handle is
+assigned, so the helper would recurse into a second connection on the same file.
 
 WAL mode plus a 5-second busy timeout: Next.js may run several server workers,
 and WAL lets them read concurrently while one writes rather than surfacing
@@ -196,15 +234,23 @@ invents resolves to no link because citations are matched against real records.
 ## Ingestion
 
 ```
-upload → size check → extension allowlist → decode → binary sniff
-       → chunk → extract → classify → analyse
+upload → size check → extension allowlist → decode (PDF: unpdf) → binary sniff
+       → clean (furniture, headings) → store the cleaned text
+       → chunk → extract → classify → bindsOn → analyse
        → refreshConflicts(whole project)
        → refreshRelationships(whole project)
 ```
 
 `extractText()` is the **format seam**: everything downstream takes a string, so
-adding PDF support means implementing one branch and nothing else — no screen,
-query or detector changes.
+PDF support is one branch in it and nothing else — no screen, query or detector
+changed. DOCX would be the same shape. A PDF with no selectable text is refused
+rather than analysed: a scanned document parses fine and yields almost nothing,
+and a register that looks populated and means nothing is worse than a refusal.
+
+**The stored document is the cleaned one.** `cleanDocumentText` runs before the
+chunker computes offsets, so persisting the raw upload would leave every
+citation pointing hundreds of characters off. Cleaning is idempotent, which is
+what lets the chunker run it again without moving anything.
 
 Conflict refresh runs across the **whole project**, not the new document, because
 the conflicts worth finding are precisely the ones between a new document and an
@@ -240,8 +286,16 @@ decorative grey.
 | `text.test.ts` | Segmentation and quantity parsing — a destroyed number is a missed conflict |
 | `pipeline.test.ts` | The seven planted problems, and that statements stay verbatim at their offsets |
 | `queries.test.ts` | The data layer and the full review workflow, against a real seeded database |
+| `structure.test.ts` | Furniture removal, the four heading forms, and the document-level transcript decision |
+| `binds-on.test.ts` | Who each obligation binds, and `unknown` as a designed answer |
+| `classify.test.ts` | The cue vocabulary and the word collisions it used to trip over |
+| `rfp.test.ts` | The P1 success criteria, against a synthetic fixture carrying the real documents' structure |
+| `pdf.test.ts` | A scanned or corrupt PDF is refused with a readable reason |
+| `ingest.test.ts` | The format seam: PDF in, DOCX out with an explanation |
+| `migrations.test.ts` | Migrations apply once, re-run safely, and roll back as a unit |
 | `reports.test.ts` | CSV safety and the provenance disclaimer — these files leave the building |
 | `validate.test.ts` | The trust boundary fails closed |
+| `serverless.test.ts` | The read-only-filesystem path used on Vercel |
 
 The suite that matters most is `pipeline.test.ts`. It asserts each planted
 problem individually **and** asserts the negative case for the headline detector —

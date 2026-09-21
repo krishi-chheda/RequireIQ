@@ -10,7 +10,23 @@ import { extractQuantities } from "./text";
  * with the classifier instead of trusting it.
  */
 
-/** Weighted cues per class. Multi-word cues are matched as substrings. */
+/**
+ * Weighted cues per class.
+ *
+ * Every cue is anchored at a word start and matched as a prefix from there, so
+ * an inflection still counts ("record" -> "records", "integrat" ->
+ * "integration", "event" -> "events") but a cue landing in the middle of an
+ * unrelated word does not. Measured before changing it: plain substring
+ * matching classified "uploaded documents" and "downloading the solicitation"
+ * as performance on "load", "a separate capital request" as technical on
+ * "api", "speaker identification" as performance on "peak", "a seamless
+ * transition" as compliance on "aml", and "prevent the delayed" as technical
+ * on "event". Re-measured over the demo corpus and both sample RFPs by
+ * swapping the pattern below for a bare substring match: substring matching
+ * relabels 1 demo-corpus statement and 8 of the 190 RFP statements. Whole-word
+ * matching would fix those too but relabels 8 and 18, because it also throws
+ * away the inflections the cues rely on.
+ */
 const CLASS_CUES: Record<RequirementType, Array<[string, number]>> = {
   performance: [
     ["concurrent", 3], ["throughput", 3], ["latency", 3], ["response time", 3],
@@ -27,7 +43,10 @@ const CLASS_CUES: Record<RequirementType, Array<[string, number]>> = {
   compliance: [
     ["regulat", 3], ["aml", 3], ["kyc", 3], ["sanctions", 3], ["money laundering", 3],
     ["politically exposed", 3], ["audit trail", 3], ["retention", 2], ["retained", 2],
-    ["statutory", 3], ["policy", 1], ["wcag", 2], ["legal", 2], ["supervis", 2],
+    // "illegal" is listed in its own right: anchoring means "legal" no longer
+    // reaches inside it, and an obligation about illegal payments is as much a
+    // compliance statement as one about legal ones.
+    ["statutory", 3], ["policy", 1], ["wcag", 2], ["legal", 2], ["illegal", 2], ["supervis", 2],
     ["financial crime", 3], ["screening", 2], ["data protection", 3], ["gdpr", 3],
     ["records", 1], ["disposal", 2], ["consent", 2],
   ],
@@ -41,7 +60,7 @@ const CLASS_CUES: Record<RequirementType, Array<[string, number]>> = {
     ["accessib", 3], ["wcag", 3], ["usable", 3], ["easy to use", 3], ["screen reader", 3],
     ["plain language", 3], ["journey", 2], ["interface", 2], ["mobile browser", 2],
     ["abandon", 2], ["customer experience", 2], ["welsh", 2], ["design", 1],
-    ["resume", 1], ["comprehen", 2],
+    ["resume", 1],
   ],
   technical: [
     ["integrat", 3], ["api", 2], ["service bus", 3], ["event", 2], ["deploy", 2],
@@ -65,6 +84,48 @@ const CLASS_CUES: Record<RequirementType, Array<[string, number]>> = {
   ],
 };
 
+/**
+ * Cues whose prefix form collides with a longer, unrelated word, spelled out as
+ * explicit whole-word inflections instead.
+ *
+ * Start-anchoring cannot help where the cue *is* the prefix of the colliding
+ * word, and measured inside extracted statements each of these produced a real
+ * misclassification: "design" matched "designated" x3 and "designee" x1 - dense
+ * procurement vocabulary - labelling two submission-deadline clauses ux;
+ * "event" matched "eventual", labelling a public-inspection clause technical;
+ * "sustain" matched "sustainable", labelling a double-sided-printing clause
+ * performance. "access" is here for a second reason as well: as a prefix it
+ * also fires on "accessibility", which the ux cue "accessib" already scores, so
+ * one word scored 4 across two classes and inflated the margin that feeds
+ * confidence.
+ *
+ * Every other cue keeps prefix matching, because it genuinely relies on it for
+ * inflections ("integrat" -> "integration", "submit" -> "submitted" x21).
+ */
+const WHOLE_WORD_CUES: Record<string, string[]> = {
+  access: ["access", "accesses", "accessed", "accessing"],
+  design: ["design", "designs", "designed", "designing"],
+  event: ["event", "events"],
+  sustain: ["sustain", "sustains", "sustained", "sustaining"],
+};
+
+const escapeCue = (cue: string): string => cue.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** One pattern per cue, compiled once at module load. */
+const CUE_PATTERNS = new Map<string, RegExp>(
+  Object.values(CLASS_CUES)
+    .flat()
+    .map(([cue]) => {
+      const inflections = WHOLE_WORD_CUES[cue];
+      return [
+        cue,
+        inflections
+          ? new RegExp(`\\b(?:${inflections.map(escapeCue).join("|")})\\b`, "i")
+          : new RegExp(`\\b${escapeCue(cue)}`, "i"),
+      ] as const;
+    }),
+);
+
 export interface Classification {
   type: RequirementType;
   /** 0-1 separation between the winner and runner-up, used for confidence. */
@@ -80,7 +141,6 @@ export interface Classification {
  * matched nothing specific is a plain capability statement, not a mystery.
  */
 export function classifyRequirement(statement: string): Classification {
-  const haystack = statement.toLowerCase();
   const scores = new Map<RequirementType, number>();
   const hits = new Map<RequirementType, string[]>();
 
@@ -88,7 +148,7 @@ export function classifyRequirement(statement: string): Classification {
     let score = 0;
     const matched: string[] = [];
     for (const [cue, weight] of cues) {
-      if (haystack.includes(cue)) {
+      if (CUE_PATTERNS.get(cue)?.test(statement)) {
         score += weight;
         matched.push(cue);
       }

@@ -2,6 +2,7 @@ import "server-only";
 
 import { getDb } from "./db";
 import type { ProjectContext } from "./ai/provider";
+import type { BindsOn } from "./ai/engine/binds-on";
 import type {
   Ambiguity,
   AmbiguityKind,
@@ -107,6 +108,8 @@ function mapRequirement(row: Row): Requirement {
     acceptanceCriteria: strOrNull(row.acceptance_criteria),
     postBaseline: bool(row.post_baseline),
     qualityScore: num(row.quality_score),
+    bindsOn: str(row.binds_on) as BindsOn,
+    bindsOnEvidence: str(row.binds_on_evidence),
     createdAt: str(row.created_at),
     updatedAt: str(row.updated_at),
   };
@@ -476,6 +479,8 @@ export interface RequirementFilters {
   hasFindings?: boolean;
   /** Only requirements with no named owner. */
   unowned?: boolean;
+  /** Only obligations binding this actor. */
+  bindsOn?: BindsOn;
 }
 
 export function listRequirements(projectId: string, filters: RequirementFilters = {}): Requirement[] {
@@ -493,6 +498,10 @@ export function listRequirements(projectId: string, filters: RequirementFilters 
   if (filters.priority) {
     clauses.push("r.priority = ?");
     params.push(filters.priority);
+  }
+  if (filters.bindsOn) {
+    clauses.push("r.binds_on = ?");
+    params.push(filters.bindsOn);
   }
   if (filters.postBaseline) clauses.push("r.post_baseline = 1");
   if (filters.unowned) clauses.push("r.owner_stakeholder_id IS NULL");

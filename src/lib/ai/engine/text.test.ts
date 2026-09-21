@@ -35,16 +35,23 @@ describe("splitSentences", () => {
 
 describe("chunkDocument", () => {
   it("splits transcripts on speaker turns and records the speaker", () => {
+    // Each speaker needs a second turn: isTranscript (Task 4) only classifies a
+    // document as a transcript once a speaker is seen repeating, which is what
+    // tells a real dialogue apart from a one-off form label.
     const doc = [
       "# Workshop 07",
       "",
       "KENJI MORI (Platform Engineering Lead, Meridian Bank): The platform must support 10,000 concurrent users.",
       "",
       "TOM DEVLIN (Solution Architect, Northgate Advisory): Where did that number come from?",
+      "",
+      "KENJI MORI: Product modelled it against three-year growth.",
+      "",
+      "TOM DEVLIN: Noted.",
     ].join("\n");
     const chunks = chunkDocument(doc);
     const speakers = chunks.map((c) => c.speaker).filter(Boolean);
-    expect(speakers).toEqual(["KENJI MORI", "TOM DEVLIN"]);
+    expect(speakers).toEqual(["KENJI MORI", "TOM DEVLIN", "KENJI MORI", "TOM DEVLIN"]);
     expect(chunks.find((c) => c.speaker === "KENJI MORI")!.locator).toBe("KENJI MORI, turn 1");
   });
 
@@ -93,6 +100,24 @@ describe("extractQuantities", () => {
     expect(days!.value).toBe(30 * 86_400);
   });
 
+  it("does not read a number inside a hyphenated name as a quantity", () => {
+    // "AES-256 at rest" was being read as the count "256 rest", which reached
+    // the rationale a reviewer sees on a human-edited row and the old -> new
+    // line written into the audit trail. The statute citations real RFPs carry
+    // are the same shape: over both sample RFPs, the fixture and the demo
+    // corpus this removes exactly three readings (13-1-29, 13-1-116, 13-1-172)
+    // and no genuine quantity.
+    expect(
+      extractQuantities("The solution shall encrypt every stored record using AES-256 at rest."),
+    ).toEqual([]);
+    expect(
+      extractQuantities("Pursuant to NMSA 1978, Section 13-1-116, the contents are confidential."),
+    ).toEqual([]);
+    // The hyphen after a number still binds it to its unit: "12-week" is real.
+    const weeks = extractQuantities("A 12-week observation period is required.");
+    expect(weeks[0]!.dimension).toBe("duration");
+  });
+
   it("parses percentages and dates", () => {
     expect(extractQuantities("must achieve 99.99% availability")[0]!.value).toBe(99.99);
     const date = extractQuantities("The platform must go live on 2 March 2027.")[0]!;
@@ -124,5 +149,46 @@ describe("tokenize", () => {
   it("drops stopwords and aligns simple inflections", () => {
     expect(tokenize("The system must retain screening records")).not.toContain("the");
     expect(tokenize("screening outcomes")[0]).toBe(tokenize("screened outcome")[0]);
+  });
+});
+
+describe("chunkDocument on plain text without Markdown", () => {
+  const rfp = [
+    "CITY OF SOMEWHERE",
+    "Page 1 of 2",
+    "",
+    "3.1 General Requirements",
+    "",
+    "The solution shall provide role-based access control for all staff users.",
+    "",
+    "3.2 Capacity",
+    "",
+    "The solution shall support 500 concurrent users at peak load.",
+    "",
+    "CITY OF SOMEWHERE",
+    "Page 2 of 2",
+    "",
+    "C. SUBMISSION REQUIREMENTS",
+    "",
+    "Respondents shall submit one electronic copy of the proposal.",
+  ].join("\n");
+
+  it("gives clauses their own locators rather than one document default", () => {
+    const locators = new Set(chunkDocument(rfp).map((c) => c.locator));
+    expect(locators.has("3.1 General Requirements")).toBe(true);
+    expect(locators.has("3.2 Capacity")).toBe(true);
+    expect(locators.has("C. SUBMISSION REQUIREMENTS")).toBe(true);
+    expect(locators.size).toBeGreaterThanOrEqual(3);
+  });
+
+  it("attributes no speakers in a document that is not a transcript", () => {
+    expect(chunkDocument(rfp).every((c) => c.speaker === null)).toBe(true);
+  });
+
+  it("still slices offsets back to the chunk text", () => {
+    for (const chunk of chunkDocument(rfp)) {
+      expect(chunk.text.length).toBeGreaterThan(0);
+      expect(chunk.end - chunk.start).toBe(chunk.text.length);
+    }
   });
 });
