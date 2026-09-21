@@ -19,6 +19,10 @@ curl -LO "https://www.mercerisland.gov/sites/default/files/fileattachments/publi
 curl -LO "https://www.santafecountynm.gov/documents/solicitations/2026-0391-CMO_RFP_Agenda_and_Meeting_Software.pdf"
 ```
 
+Once the PDFs are here, `npm run probe:rfp` prints the success metrics for
+each of them; the current figures are in the README under *Running the probe on
+your own documents*.
+
 ## Why these two
 
 Software procurement RFPs are obligation-dense, structurally unlike the demo

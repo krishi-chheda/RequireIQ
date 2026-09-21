@@ -29,9 +29,59 @@ lost for most turns in the document. One regex, `SPEAKER_TURN`, handles both and
 is shared with the extractor so the two cannot drift apart.
 
 All-caps names are what keeps the bare form off email headers (`From:`,
-`Subject:`) and ordinary prose.
+`Subject:`) and ordinary prose. Whether speaker turns are read at all is a
+document-level decision taken before chunking — see *Structure recovery* below.
 
-## 2. Sentence splitting (`text.ts`)
+## 2. Structure recovery (`structure.ts`)
+
+PDF-derived text has no Markdown. Without this step the chunker falls through to
+paragraph splitting and every citation in a 34-page RFP collapses to the
+document default, which is the same as having no citation at all.
+
+Three things happen, in this order, and all of them happen to the **document**,
+never to an extracted statement. `chunkDocument` cleans before it computes
+offsets, and `ingest.ts` and `seed.ts` store the *cleaned* text, so the
+register's contract — the recorded range quotes the statement back verbatim —
+still holds. Cleaning is idempotent, which is what lets both call it.
+
+**Page furniture goes by repetition, not by pattern.** A running header or
+footer is whatever line appears three or more times in a document of at least
+eight lines and is under 120 characters. Nobody can enumerate the header of an
+arbitrary RFP; repetition is the property that actually distinguishes furniture
+from prose. Bare page numbers go by pattern as well, and list items are exempt
+from the furniture count — running headers are never bulleted, and identical
+bulleted text repeats legitimately.
+
+**Headings are read one line at a time, in a fixed order**: numbered clause
+(`3.2.1 Capacity and Throughput`), lettered clause (`C. SCOPE OF WORK`), all
+caps, then `Title case ending in a colon:`. The order is pinned by test.
+
+All four forms share one discriminator, `isLabel`, in every clause — and that
+uniformity is the rule rather than an accident, because a per-form exception is
+exactly how a numbered line became a heading while the identical unnumbered line
+stayed body. A label has a title-cased first word, at most ten words, no
+dangling function word at the end, no internal sentence boundary (asked of
+`splitSentences`, the same splitter the rest of the engine reads sentences
+with), and no mid-clause modal.
+
+Getting this wrong is not cosmetic: `chunkDocument` drops a heading line from
+the body it chunks, so a wrapped obligation clause misread as a heading is
+**deleted** from the document the extractor sees, and its continuation is then
+cited to a fragment. Each clause of `isLabel` was measured against both sample
+RFPs, the synthetic fixture and the demo corpus; the numbers behind the
+ten-word cap are in the source comment.
+
+**Transcript detection is a decision about the document, not about a line.**
+The per-line speaker pattern cannot tell `KENJI MORI:` from `E-MAIL:` — both are
+capitals followed by a colon — so applied per line it invents a speaker out of
+every RFP form label, and the register then attributes procurement boilerplate
+to a person who does not exist. The distinguishing fact is repetition plus
+shape: a document is a transcript when at least two distinct multi-word labels
+each appear at least twice. Multi-word matters on its own, because a two-contact
+signature block repeating `NAME:` / `TITLE:` clears the repetition test by
+itself.
+
+## 3. Sentence splitting (`text.ts`)
 
 Deliberately conservative. A full stop ends a sentence only when followed by
 whitespace and an uppercase letter, digit or quote — and never inside a decimal
@@ -43,7 +93,7 @@ because bullet lists and note-form documents often have no terminal punctuation.
 
 Offsets are absolute into the document throughout.
 
-## 3. Quantity parsing (`text.ts`)
+## 4. Quantity parsing (`text.ts`)
 
 Five dimensions, each normalised to a canonical unit so two statements can be
 compared arithmetically:
@@ -67,7 +117,7 @@ detector cannot tell a floor from a ceiling, and would fire on both.
 All numeric formatting is pinned to `en-US`. Left to the default locale, a server
 in India renders `$2,00,000` in a client-facing conflict report.
 
-## 4. Extraction (`extract.ts`)
+## 5. Extraction (`extract.ts`)
 
 An **obligation detector**, not a summariser.
 
@@ -75,13 +125,52 @@ An **obligation detector**, not a summariser.
 chunk → sentences → obligation modal? → filters → verbatim statement + offsets
 ```
 
-Six modal patterns ranked by how binding they are, from `must not` (1.0) down to
-`can be` (0.3). Three rejection filters, each recording its reason so the UI can
-show what was *not* extracted and why:
+Seven modal patterns, tried in order, each carrying how binding it is: `must
+not`/`shall not` (1.0), `must`/`shall` (1.0), `is required to` (0.9), `needs to`
+(0.7), `should` (0.6), `will be able to`/`can be` (0.3), and the **commitment
+modal** (0.5).
+
+The commitment modal is the RFP addition. A buyer commits with `will`, not with
+`shall` — *"The City will provide test data within ten working days of contract
+award"* is a real obligation on the acquiring party, and without it the register
+captures only the obligations pointing at the supplier. A bare `will` also
+swallows narrative (*"the two documents will appear to disagree"*), so the
+pattern is anchored at the sentence subject and guarded by `hasActorSubject`,
+which reuses the `bindsOn` cue list rather than keeping a second copy of it. The
+guard also admits the regular passive — *"Proposals will be evaluated based upon
+…"* — because an obligation stands whoever performs it, and where nobody is
+identifiable `classifyBindsOn` answers `unknown`.
+
+Three rejection filters, each recording its reason so the UI can show what was
+*not* extracted and why:
 
 - **Interrogative** — a question, not an obligation.
 - **Facilitation note** — `I will capture that`, `no decision taken`, `under review`.
 - **No domain subject** — *"It needs to feel instant"* mentions no buildable thing.
+
+Each rejection also carries a structural `RejectionKind`, `"vocabulary"` or
+`"interrogative"`. The coverage metric below has to ask *"was this rejected on
+vocabulary?"*, and comparing a displayed sentence against one exact prose string
+means any reworded reason silently scores as covered. The facilitation filter
+counts as vocabulary too: it is a word list under a different label.
+
+### The coverage metric (`obligationCoverage`)
+
+The P1 success criterion — every shall/must sentence is either extracted or
+rejected for a reason other than vocabulary — measured **per sentence**, over
+exactly the sentence stream extraction saw. It is not a ratio of captured items
+to occurrences of "shall": nothing in that checks that the items captured *are*
+those sentences, and on real documents it measured above 100%.
+
+**Its known blind spot, deliberately left latent:** the denominator is counted
+downstream of `chunkDocument`, so a sentence wrongly read as a heading is
+dropped from *both* sides of the ratio and scores as perfect coverage. It stays
+latent because `isLabel` forbids a whole shall/must line from becoming a
+heading; closing it means counting over the raw text, which is separate work.
+
+`npm run probe:rfp` prints this metric per document: 75% (67/89) on the Mercer
+Island RFP and 81% (70/86) on Santa Fe County, against a target of 75%. It also
+prints every missed sentence, so the next improvement is chosen from evidence.
 
 **Confidence is a reading confidence**, not a judgement about whether the
 requirement is a good idea. It starts at 0.5, rises with modal strength, present
@@ -94,7 +183,7 @@ fit inside. This split matters for conflict detection: the interesting
 contradictions are almost always a requirement pushing against a constraint
 somebody else set, in a document its author never read.
 
-## 5. Classification (`classify.ts`)
+## 6. Classification (`classify.ts`)
 
 Lexicon-scored across nine classes, each cue weighted 1–3. Chosen over a learned
 classifier for two reasons that matter in consulting: it needs no labelled
@@ -110,7 +199,48 @@ Priority is read from the **modal verb**, per ISO/IEC/IEEE 29148: `must`/`shall`
 is binding, `should` is advisory, `may`/`could` is discretionary. Reading the
 modal rather than guessing importance keeps the register defensible in review.
 
-## 6. Quality analysis (`ambiguity.ts`)
+Every cue is anchored at a word start and matched as a prefix from there, so an
+inflection still counts (`record` → `records`, `integrat` → `integration`) but a
+cue landing inside an unrelated word does not. Plain substring matching
+classified *"downloading the solicitation"* as performance on `load` and *"a
+seamless transition"* as compliance on `aml`. Four cues (`access`, `design`,
+`event`, `sustain`) are themselves the prefix of a colliding word, so anchoring
+cannot help them and they are spelled out as explicit whole-word inflections.
+
+## 7. Who an obligation binds (`binds-on.ts`)
+
+A dimension **orthogonal to requirement type**, not an extension of it: a
+security obligation on the supplier and one on the system are both security.
+Five values — `system`, `supplier`, `bidder`, `buyer`, `unknown` — and the
+matched cue is stored alongside, so the badge can explain itself.
+
+The earliest cue in the sentence wins, because the grammatical subject comes
+first: *"The Contractor shall configure the system"* binds the supplier, not the
+system. Two sigils tune a cue: `^term` matches only in subject position (a bare
+`city` appearing later usually names what a clause is *about* rather than who it
+binds), and `term$` refuses inflections (`the service$`, because "the services"
+throughout a county contract means the Contractor's services).
+
+Document cues — `proposal`, `bids` — classify but cannot commit: a proposal is
+the bidder's, so *"Proposals must be submitted by 3pm"* binds the bidder. They
+are excluded from `AGENT_SUBJECT`, the export the extractor's commitment-modal
+guard asks, because a document is not an agent and including them let
+announcements through as obligations.
+
+**Why this replaced a vocabulary judgement rather than extending one.** The
+rejection filter asked *"does this sentence contain a word I recognise?"*, which
+is a list that will never be complete — it rejected 132 genuine obligations
+across the two sample RFPs, every one for the same reason. The question here is
+*"can I identify who this binds?"*, and `unknown` is a designed answer that
+surfaces for review instead of discarding the statement. `classifyBindsOn`
+therefore **never gates extraction**.
+
+The domain-noun list still exists in `extract.ts` as the last rejection filter,
+widened with procurement vocabulary. It does a narrower job than before —
+telling conversational filler from a statement about a buildable thing — and it
+is no longer asked who the obligation binds.
+
+## 8. Quality analysis (`ambiguity.ts`)
 
 Seven finding types. Every one names the exact span, explains the problem in the
 vocabulary a BA uses, and proposes a **measurable** rewrite:
@@ -135,7 +265,7 @@ measurable clause — they are only vague when they *are* the test.
 `qualityScore` is a deduction from 1, not a model output: a reviewer can
 reconstruct it from the findings list.
 
-## 7. Similarity (`similarity.ts`)
+## 9. Similarity (`similarity.ts`)
 
 TF-IDF with cosine distance over the project's own statements. Smoothed IDF so a
 term present everywhere still contributes a little.
@@ -150,7 +280,7 @@ saying the same thing in different words score low. The conflict detectors
 compensate by combining this signal with quantity and polarity analysis rather
 than relying on it alone.
 
-## 8. Conflict detection (`conflict.ts`)
+## 10. Conflict detection (`conflict.ts`)
 
 Five detectors. Each states the arithmetic or linguistic pattern that made it
 fire, and each phrases its output as a tension to validate rather than a verdict.
@@ -223,7 +353,7 @@ The surviving conflict keeps the highest-severity, highest-confidence pair and
 lists the others in `alsoStatedIn`. On the demo corpus this collapses 11
 raw detections into 7 real ones.
 
-## 9. Coverage gaps (`coverage.ts`)
+## 11. Coverage gaps (`coverage.ts`)
 
 The hardest question in discovery is not *"is this requirement wrong"* but
 *"what did nobody say"*.
@@ -234,7 +364,7 @@ requirements is indistinguishable from invention. Each rule has trigger terms
 say anything?). A rule that does not trigger produces nothing: the detector never
 claims a project needs something it has shown no sign of needing.
 
-## 10. Relationship inference (`coverage.ts`)
+## 12. Relationship inference (`coverage.ts`)
 
 Edges from lexical overlap, typed by strength and language:
 
@@ -248,7 +378,7 @@ Below 0.18 no edge is drawn. A graph that connects everything to everything tell
 a reviewer nothing. `contradicts` edges come from conflicts and are owned by that
 table.
 
-## 11. The assistant (`../local.ts`)
+## 13. The assistant (`../local.ts`)
 
 Retrieval and aggregation over existing records. **No generative step at all** —
 every sentence is either a template filled with counted records, or text quoted
@@ -264,6 +394,39 @@ Both gates are needed. A single incidental word match lets a question about a
 chief executive's home address surface a requirement about postcode *address*
 validation. Two distinct shared terms turns that into an honest *"Insufficient
 evidence"*.
+
+---
+
+## Known gaps
+
+Accepted limitations, established by measurement rather than guessed at. They
+are here so a reader knows what the register does *not* contain.
+
+- **List items under a modal-bearing stem are not extracted individually.**
+  *"The selected firm shall provide the following services:"* is registered as
+  one obligation; the a)/b)/c) items beneath it carry no modal of their own, so
+  each named service is absent from the register. Attaching list items to their
+  stem is a feature, not a filter change.
+- **Neither sample RFP yields a constraint.** `constraints 0` on both — they
+  state no spend cap. The capacity-versus-budget detector is therefore exercised
+  by the demo corpus and the synthetic fixture, and not by real procurement
+  text. Absence of a finding here is the documents, not the detector.
+- **Roughly a fifth to a quarter of shall/must sentences are still missed** —
+  75% (67/89) Mercer Island, 81% (70/86) Santa Fe County. The probe prints each
+  missed sentence; most are contract boilerplate about the resulting contract
+  rather than about the system.
+- **`obligationCoverage` cannot see a sentence lost to a heading** — see the
+  blind spot under *Extraction*.
+- **`acceptance_criteria` is not refreshed when a reviewer typed it.** Editing a
+  statement re-derives every field that quotes it, but that column has no
+  per-field provenance: `deriveAcceptanceCriteria` only ever returns the
+  statement verbatim or null, so a copy of the *old* statement is treated as
+  derived and refreshed, and anything else is treated as human and left alone.
+- **Two documents, one jurisdiction.** The engine is measured against two US
+  local-government software RFPs. Clause numbering, heading case and the
+  vocabulary naming the contracting parties are local conventions;
+  `npm run probe:rfp` is how you find out what a document from elsewhere scores
+  before trusting its register.
 
 ---
 

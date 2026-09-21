@@ -43,8 +43,9 @@ across the whole corpus — which is what this product does.
 
 | | |
 |---|---|
+| **Ingestion** | Plain text, Markdown, CSV and **PDF**. Page furniture is removed, headings are recovered from unstyled text, and the cleaned document is what gets stored — so offsets cite what the analyser read. |
 | **Extraction** | Finds obligation sentences and lifts them **verbatim**, keeping character offsets. It never rewrites source text into a requirement. |
-| **Classification** | Nine requirement types and MoSCoW priority, read from the modal verb, with the matched terms shown as evidence. |
+| **Classification** | Nine requirement types and MoSCoW priority, read from the modal verb, with the matched terms shown as evidence. Each obligation also records **who it binds** — system, supplier, bidder, buyer or `unknown` — with the cue that decided it. |
 | **Quality analysis** | 37 vague-term patterns, unquantified thresholds, missing acceptance criteria, undefined actors, compound requirements, unverified assumptions, reported speech. Each names the exact span and proposes a measurable rewrite. |
 | **Conflict detection** | Five detectors comparing every record against every other, **across documents**. Each shows its arithmetic and states what a human must validate. |
 | **Coverage gaps** | What nobody wrote down, by checklist against comparable regulated delivery. Never generated, so a gap is a real absence. |
@@ -116,16 +117,19 @@ Browser
 │ src/lib/server-actions.ts   trust boundary: validate → write → revalidate    │
 │ src/lib/validate.ts         input validation, fails closed                   │
 │ src/lib/ingest.ts           upload pipeline + conflict refresh               │
+│ src/lib/pdf.ts              PDF bytes → text (unpdf), the only format seam   │
 │ src/lib/reports.ts          six consulting deliverables                      │
 ├──────────────────────────────────────────────────────────────────────────────┤
 │ src/lib/ai/index.ts         provider resolution                              │
 │ src/lib/ai/provider.ts      AIProvider interface                             │
 │ src/lib/ai/local.ts         deterministic engine + grounded assistant        │
 │ src/lib/ai/anthropic.ts     optional hosted model, assistant only            │
-│ src/lib/ai/engine/          text · classify · extract · ambiguity ·          │
-│                             similarity · conflict · coverage                 │
+│ src/lib/ai/engine/          text · structure · classify · extract ·          │
+│                             binds-on · ambiguity · similarity ·              │
+│                             conflict · coverage                              │
 ├──────────────────────────────────────────────────────────────────────────────┤
-│ src/lib/db/                 node:sqlite — connection · schema · seed          │
+│ src/lib/db/                 node:sqlite — connection · schema · migrations ·  │
+│                             seed                                             │
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -133,7 +137,7 @@ Browser
 
 **Next.js App Router, server-component-first.** Pages read SQLite directly and
 render on the server; mutations go through server actions. The result is 103 kB
-of shared JavaScript and per-page bundles of 180 B – 2.7 kB. Twelve of the
+of shared JavaScript and per-page bundles of 134 B – 2.73 kB. Twelve of the
 fifty-odd components are client components, each because it genuinely needs
 browser state; everything else renders on the server.
 
@@ -185,7 +189,8 @@ breaking the page.
 
 ## Setup
 
-Requires **Node 22+** (for `node:sqlite`). Built and tested on Node 24.
+Requires **Node 22.13+** (`engines` in `package.json`, for `node:sqlite`).
+Built and tested on Node 24.
 
 ```bash
 npm install
@@ -220,8 +225,40 @@ Selecting `anthropic` without a key degrades to `local` and shows a
 | `npm run typecheck` | `tsc --noEmit`. |
 | `npm run lint` | ESLint. |
 | `npm run verify` | typecheck → lint → test → build. |
+| `npm run probe:rfp` | Print the RFP success metrics for every PDF in `samples/rfp/`. |
 | `node scripts/sync-demo-data.mjs` | Regenerate the corpus module after editing `demo-data/`. |
 | `node scripts/sync-schema.mjs` | Regenerate the schema module after editing `schema.sql`. |
+
+### Running the probe on your own documents
+
+`npm run probe:rfp` runs the ingestion path — PDF text extraction, cleaning,
+chunking, extraction, `bindsOn` — over every `*.pdf` in `samples/rfp/` and
+prints the metrics the engine is held to, plus the shall/must sentences it
+walked past. It touches no database and is not part of CI; it is the thing to
+run when a real document behaves oddly.
+
+```bash
+mkdir -p samples/rfp
+cp ~/Downloads/your-rfp.pdf samples/rfp/
+npm run probe:rfp
+```
+
+The directory is gitignored — see [`samples/rfp/README.md`](samples/rfp/README.md)
+for the two public procurement documents this engine was measured against and
+how to re-fetch them. On those two, at the commit this was written:
+
+| | Mercer Island | Santa Fe County |
+|---|---|---|
+| Pages · chunks | 34 · 76 | 40 · 134 |
+| Requirements · constraints · rejected | 87 · 0 · 26 | 103 · 0 · 19 |
+| Specific locators (target ≥ 80%) | 100% | 100% |
+| shall/must sentence coverage (target ≥ 75%) | 75% (67/89) | 81% (70/86) |
+| Speakers invented (target 0) | 0 | 0 |
+
+Those are the honest figures, not rounded ones: roughly a quarter of the
+Mercer Island shall/must sentences are still missed, and the probe prints each
+of them so the next improvement is chosen from evidence. Constraints are 0 on
+both because neither document states a spend cap.
 
 ---
 
@@ -257,8 +294,8 @@ and a 99.99% availability target against a 4-hour recovery time objective.
 
 ### What the seed produces
 
-82 requirements · 6 constraints · 7 conflicts · 95 quality findings · 35 risks ·
-6 coverage gaps · 60 relationship edges · requirements health **30/100, critical**.
+82 requirements · 6 constraints · 7 conflicts · 95 quality findings · 31 risks ·
+6 coverage gaps · 59 relationship edges · requirements health **30/100, critical**.
 
 ### Guided walkthrough (~3 minutes)
 
@@ -287,7 +324,7 @@ re-analyses the corpus from source.
 
 ## Data model
 
-Twelve tables plus a `meta` row-store. Full DDL in
+Fifteen tables plus a `meta` row-store. Full DDL in
 [`src/lib/db/schema.sql`](src/lib/db/schema.sql).
 
 ```
@@ -317,12 +354,29 @@ ambiguity or risk to a document, a chunk, a quote and a character range.
 npm test
 ```
 
-**97 tests across six suites.** Not smoke tests — the interesting ones assert
-properties that would otherwise quietly rot:
+**252 tests across thirteen suites.** Not smoke tests — the interesting ones
+assert properties that would otherwise quietly rot:
 
 - **`text.test.ts`** — sentence splitting that survives `99.99%` and `$200,000`,
   structure-aware chunking, quantity parsing across five dimensions, bound
   direction (`at least` vs `must not exceed`).
+- **`structure.test.ts`** — page-furniture removal by repetition, the four
+  heading forms and the shared label test that keeps a wrapped obligation
+  clause out of them, and the document-level transcript decision that stops an
+  RFP form label (`E-MAIL:`) becoming a speaker.
+- **`binds-on.test.ts`** — who each obligation binds, including the possessive
+  and subject-position cases, and `unknown` as a designed answer.
+- **`classify.test.ts`** — the cue vocabulary, including the collisions
+  (`design`/`designee`, `access`/`accessibility`) that whole-word matching fixes.
+- **`rfp.test.ts`** — the P1 success criteria asserted against
+  `demo-data-rfp/synthetic-rfp.txt`: specific locators, per-sentence
+  shall/must coverage, no invented speakers.
+- **`pdf.test.ts`** — a scanned PDF is refused rather than analysed into an
+  empty-looking register; a corrupt one gets a readable error.
+- **`ingest.test.ts`** — the format seam: PDF accepted, DOCX refused with the
+  reason, binary content sniffed out.
+- **`migrations.test.ts`** — the append-only migration list applies once, is
+  safe to re-run, and rolls back as a unit.
 - **`pipeline.test.ts`** — the seven planted problems, each asserted individually.
   Also: every extracted statement slices back out of its source document at the
   recorded offsets; conflicts hedge and never say "impossible"; the sizing
@@ -338,8 +392,8 @@ properties that would otherwise quietly rot:
   fragments, path traversal, control characters and oversized input.
 
 Verified manually in the browser: every route returns 200, all six exports
-download, ingestion succeeds and rejects PDF/binary/empty files with the right
-status codes, the review workflow persists and audits, the assistant answers and
+download, ingestion succeeds on text and PDF and rejects DOCX/binary/empty files
+with the right status codes, the review workflow persists and audits, the assistant answers and
 refuses correctly, the demo reset restores pristine state, and the layout has no
 horizontal overflow at 375 px.
 
@@ -417,7 +471,7 @@ scrolls horizontally. Verified at 375 px with zero overflow.
 
 ## Performance
 
-- Server components by default: 103 kB shared JS, per-page 180 B – 2.7 kB.
+- Server components by default: 103 kB shared JS, per-page 134 B – 2.73 kB.
 - Twelve client components total, each with a reason (listed in `docs/architecture.md`).
 - The graph uses a deterministic radial layout, not a force simulation — no
   animation frame loop, and the same register always draws the same picture.
@@ -455,7 +509,7 @@ attaching a real database — see the migration note under *Persistence* in
 `docs/architecture.md` — and setting `REQUIREIQ_DB_PATH` (which also
 suppresses the banner) or replacing `src/lib/db/connection.ts`.
 
-**Node version.** `node:sqlite` needs Node 22.5+, declared in `engines`. Set
+**Node version.** `engines` declares Node 22.13+. Set
 the project's Node version to 22.x or later in Vercel's project settings if it
 does not pick it up.
 
@@ -474,27 +528,51 @@ This is the deployment target the architecture actually suits.
 ## Known limitations
 
 1. **No authentication.** See Security. Blocking for any real deployment.
-2. **PDF and DOCX are not parsed.** The pipeline is format-agnostic — it takes a
-   string — so support is a single branch in `extractText()`
-   (`src/lib/ingest.ts`) using `pdfjs-dist` or `mammoth`. Uploading one returns a
-   clear 415 rather than analysing binary noise into plausible requirements.
-3. **Similarity is lexical, not semantic.** TF-IDF matches vocabulary, not
+2. **The engine is tested against two US local-government RFPs**, and RFP
+   structure varies by jurisdiction: clause numbering, heading case and the
+   vocabulary for the contracting parties are all local conventions. What the
+   probe measures on those two is in *Running the probe on your own documents*
+   above; a document from a different jurisdiction may score lower, and the
+   probe is how you find out before trusting the register.
+3. **List items under a modal-bearing stem are not extracted individually.**
+   "The selected firm shall provide the following services:" is registered as
+   one obligation; the a)/b)/c) items beneath it carry no modal of their own,
+   so each service is absent from the register. Attaching list items to their
+   stem is a feature, not a filter change.
+4. **No spend cap was found in either sample RFP** — constraints extracted: 0
+   from both. That is the documents, not the detector: neither states a budget
+   ceiling, so the capacity-versus-budget criterion is exercised by the demo
+   corpus and the synthetic fixture only.
+5. **`obligationCoverage` counts downstream of chunking.** Its denominator comes
+   from the same sentence stream extraction reads, so a sentence wrongly
+   swallowed into a heading disappears from *both* sides of the ratio and
+   scores as perfect coverage. The heading rules forbid the case that would
+   cause it, and the blind spot is documented in the code rather than closed.
+6. **`acceptance_criteria` is not refreshed on edit once a reviewer has typed
+   one.** Every other derived field is re-derived from the new wording; that row
+   has no per-field provenance column, so a value that is not a verbatim copy of
+   the old statement is assumed to be human and left alone.
+7. **DOCX is not parsed.** PDF is; the pipeline is format-agnostic downstream —
+   it takes a string — so DOCX is a single branch in `extractText()`
+   (`src/lib/ingest.ts`) using `mammoth`. Uploading one returns a clear 415
+   rather than analysing binary noise into plausible requirements.
+8. **Similarity is lexical, not semantic.** TF-IDF matches vocabulary, not
    meaning: two requirements saying the same thing in different words score low.
    Chosen because the terms that produced a score can be shown to the reviewer.
    The conflict detectors compensate by combining it with quantity and polarity
    analysis rather than relying on it alone.
-4. **The sizing heuristic is generic.** `SIZING_MODEL` in
+9. **The sizing heuristic is generic.** `SIZING_MODEL` in
    `src/lib/ai/engine/conflict.ts` uses order-of-magnitude private-cloud unit
    costs. It is exported, shown with every input, and labelled a heuristic — but
    a real engagement should replace the constants with its own tenancy pricing.
-5. **English only**, and tuned for the register conventions of
+10. **English only**, and tuned for the register conventions of
    ISO/IEC/IEEE 29148 (`must`/`shall` binding, `should` advisory).
-6. **Single-node SQLite.** Fine for one consultancy's engagements on a host with
+11. **Single-node SQLite.** Fine for one consultancy's engagements on a host with
    a writable disk; a multi-tenant deployment, or a serverless one with durable
    writes, needs Postgres. See *Deployment* above.
-7. **Conflict detection is O(n²)** over the register. Comfortable to a few
+12. **Conflict detection is O(n²)** over the register. Comfortable to a few
    thousand requirements; beyond that it needs an inverted-index candidate filter.
-8. **The classifier occasionally mislabels business requirements as functional**
+13. **The classifier occasionally mislabels business requirements as functional**
    when they lack commercial vocabulary. It shows its matched terms, so a
    reviewer can see and correct it.
 
@@ -508,8 +586,8 @@ If this became a real enterprise product, in order:
    deterministic detectors as the auditable floor, add an embedding model to
    catch the semantic conflicts TF-IDF misses, and surface both with the same
    provenance labelling.
-3. **PDF, DOCX and connector ingestion** — SharePoint, Confluence, Teams
-   recordings, Outlook. The seam exists.
+3. **DOCX and connector ingestion** — SharePoint, Confluence, Teams
+   recordings, Outlook. PDF already lands through the same seam.
 4. **Bidirectional JIRA and Azure DevOps sync** — push approved requirements as
    epics, pull implementation status back to close the traceability loop from
    requirement to shipped code.
@@ -527,14 +605,16 @@ If this became a real enterprise product, in order:
 
 ```
 demo-data/          15 authored source documents (the corpus, re-uploadable)
+demo-data-rfp/      synthetic RFP fixture carrying the real documents' structure
+samples/rfp/        where you put real RFP PDFs for the probe (gitignored)
 docs/               architecture and analysis-engine notes
-scripts/            corpus and schema code generation
+scripts/            corpus and schema code generation, and the RFP probe
 src/app/            routes — landing, workspace, API handlers
 src/components/     UI: primitives, evidence, review, graph, assistant, tour
 src/lib/ai/         provider abstraction and the analysis engine
 src/lib/db/         connection, schema, seed
-src/lib/            queries, actions, ingest, reports, validation, types
-src/test/           validation and report test suites
+src/lib/            queries, actions, ingest, pdf, reports, validation, types
+src/test/           report, validation and serverless test suites
 ```
 
 ---
