@@ -354,7 +354,7 @@ ambiguity or risk to a document, a chunk, a quote and a character range.
 npm test
 ```
 
-**252 tests across thirteen suites.** Not smoke tests — the interesting ones
+**253 tests across thirteen suites.** Not smoke tests — the interesting ones
 assert properties that would otherwise quietly rot:
 
 - **`text.test.ts`** — sentence splitting that survives `99.99%` and `$200,000`,

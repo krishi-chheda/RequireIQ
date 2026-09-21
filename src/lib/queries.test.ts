@@ -62,6 +62,35 @@ describe("seed", () => {
   });
 });
 
+/**
+ * The seven counts the README publishes. They were re-measured by hand on every
+ * task and by three review rounds; this pins them so a pipeline change that
+ * moves one fails here instead of quietly making the documentation wrong.
+ *
+ * Runs before the review-workflow describes below, which mutate the register.
+ */
+describe("the published demo-corpus counts", () => {
+  it("matches what README.md claims", () => {
+    expect({
+      requirements: queries.listRequirements(projectId).length,
+      constraints: queries.listConstraints(projectId).length,
+      conflicts: queries.listConflicts(projectId).length,
+      qualityFindings: queries.listProjectAmbiguities(projectId).length,
+      risks: queries.listRisks(projectId).length,
+      coverageGaps: queries.listCoverageGaps(projectId).length,
+      relationshipEdges: queries.getGraph(projectId).edges.length,
+    }).toEqual({
+      requirements: 82,
+      constraints: 6,
+      conflicts: 7,
+      qualityFindings: 95,
+      risks: 31,
+      coverageGaps: 6,
+      relationshipEdges: 59,
+    });
+  });
+});
+
 describe("register", () => {
   it("stores requirements with full provenance", () => {
     const requirements = queries.listRequirements(projectId);

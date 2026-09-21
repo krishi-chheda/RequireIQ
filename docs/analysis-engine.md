@@ -229,8 +229,11 @@ announcements through as obligations.
 
 **Why this replaced a vocabulary judgement rather than extending one.** The
 rejection filter asked *"does this sentence contain a word I recognise?"*, which
-is a list that will never be complete — it rejected 132 genuine obligations
-across the two sample RFPs, every one for the same reason. The question here is
+is a list that will never be complete — of the 190 requirements the two sample
+RFPs yield today (87 Mercer Island + 103 Santa Fe County, printed by `npm run
+probe:rfp`), 113 contain no word from `DOMAIN_NOUNS` as it stood before the
+procurement vocabulary was added, so every one of them was being rejected for
+the same reason. The question here is
 *"can I identify who this binds?"*, and `unknown` is a designed answer that
 surfaces for review instead of discarding the statement. `classifyBindsOn`
 therefore **never gates extraction**.

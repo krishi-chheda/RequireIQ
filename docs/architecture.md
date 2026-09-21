@@ -55,7 +55,7 @@ uploaded document.
 server. There is no API layer between a page and its data, and no client-side
 data fetching, so there is no loading waterfall and no cache to invalidate.
 
-Cost: 103 kB shared JS, per-page 180 B – 2.7 kB.
+Cost: 103 kB shared JS, per-page 134 B – 2.73 kB.
 
 **Twelve client components**, each for a reason that cannot be met on the server:
 
@@ -75,7 +75,7 @@ Cost: 103 kB shared JS, per-page 180 B – 2.7 kB.
 | `error.tsx` | Error boundaries must be client components |
 
 **Register filter state lives in the URL, not in a component.** Every filtered
-view is therefore linkable — *"here are the twelve requirements with no owner"*
+view is therefore linkable — *"here are the requirements with no owner"*
 is a link a consultant can paste into an email — and the back button behaves.
 
 ---
