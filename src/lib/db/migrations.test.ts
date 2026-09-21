@@ -81,6 +81,8 @@ describe("migrations", () => {
     const old = SCHEMA_SQL.split(/\r?\n/)
       .filter((line) => !/^\s*binds_on(_evidence)?\s/.test(line))
       .join("\n");
+    // If this fails, schema.sql gained another line mentioning binds_on (an
+    // index, a constraint): extend the strip filter above, do not delete this.
     expect(old).not.toContain("binds_on");
 
     const db = new DatabaseSync(join(dir, "old-schema.db"));

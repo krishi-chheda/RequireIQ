@@ -286,6 +286,57 @@ describe("human-in-the-loop review", () => {
     }
   });
 
+  it("refreshes acceptance criteria that were derived from the old statement", () => {
+    // `deriveAcceptanceCriteria` returns the statement verbatim or null, so a
+    // criterion equal to the old statement is the engine's, not a reviewer's.
+    const derived = queries
+      .listRequirements(projectId)
+      .find((r) => r.acceptanceCriteria === r.statement && !r.statement.includes("10,000"))!;
+    expect(derived).toBeTruthy();
+
+    actions.editRequirement(
+      derived.id,
+      "The system must let the customer close their account from the dashboard.",
+      "Test Reviewer",
+    );
+
+    const after = queries.getRequirement(derived.id)!;
+    expect(after.acceptanceCriteria).toBeNull();
+  });
+
+  it("leaves reviewer-typed acceptance criteria alone across an edit", () => {
+    const requirement = queries
+      .listRequirements(projectId)
+      .find((r) => r.acceptanceCriteria === null && !r.statement.includes("10,000"))!;
+    actions.setAcceptanceCriteria(requirement.id, "Signed off by the operations lead.", "Test Reviewer");
+
+    actions.editRequirement(
+      requirement.id,
+      `${requirement.statement} The record must be retained for 7 years, verified by audit sampling.`,
+      "Test Reviewer",
+    );
+
+    expect(queries.getRequirement(requirement.id)!.acceptanceCriteria).toBe("Signed off by the operations lead.");
+  });
+
+  it("audits the old and new priority when re-derivation moves it", () => {
+    const mustRequirement = queries
+      .listRequirements(projectId, { priority: "must" })
+      .find((r) => !r.statement.includes("10,000"))!;
+
+    actions.editRequirement(
+      mustRequirement.id,
+      "The platform should offer the customer a downloadable account summary.",
+      "Test Reviewer",
+    );
+
+    const after = queries.getRequirement(mustRequirement.id)!;
+    expect(after.priority).toBe("should");
+
+    const detail = queries.listAuditTrail("requirement", mustRequirement.id).at(-1)!.detail;
+    expect(detail).toContain('Priority "must" to "should"');
+  });
+
   it("resolves a conflict and records the resolution note", () => {
     const conflict = queries.listConflicts(projectId).find((c) => c.status === "open")!;
 

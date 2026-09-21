@@ -261,7 +261,7 @@ export function describeStatement(statement: string): StatementDescription {
 
   const reasons = [
     obligation
-      ? `Detected ${obligation.label} in source sentence`
+      ? `Statement carries a ${obligation.label}`
       : "No obligation modal found in the statement",
     priorityEvidence,
     quantities.length
@@ -271,12 +271,14 @@ export function describeStatement(statement: string): StatementDescription {
           .join(", ")})`
       : "No measurable quantity found in the statement",
     hedge ? `Confidence reduced: speaker hedged with "${hedge}"` : null,
-  ].filter(Boolean);
+  ].filter((reason): reason is string => Boolean(reason));
 
   return {
     type: classification.type,
     priority,
-    rationale: `${reasons.join(". ")}.`,
+    // Some reasons (priority evidence) already end in a full stop, so strip it
+    // before joining rather than emitting "...priority.. Carries...".
+    rationale: `${reasons.map((reason) => reason.replace(/\.+$/, "")).join(". ")}.`,
     classificationEvidence: classification.evidence,
     bindsOn: binding.bindsOn,
     bindsOnEvidence: binding.evidence,

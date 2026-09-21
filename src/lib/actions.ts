@@ -94,8 +94,25 @@ export function editRequirement(requirementId: string, statement: string, review
   if (trimmed.length > 1000) throw new Error("A requirement statement must be under 1000 characters");
 
   const db = getDb();
-  const row = db.prepare("SELECT project_id, ref, statement FROM requirements WHERE id = ?").get(requirementId) as
-    | { project_id: string; ref: string; statement: string }
+  const row = db
+    .prepare(
+      `SELECT project_id, ref, statement, type, priority, rationale, classification_evidence,
+              binds_on, binds_on_evidence, acceptance_criteria
+         FROM requirements WHERE id = ?`,
+    )
+    .get(requirementId) as
+    | {
+        project_id: string;
+        ref: string;
+        statement: string;
+        type: string;
+        priority: string;
+        rationale: string;
+        classification_evidence: string;
+        binds_on: string | null;
+        binds_on_evidence: string | null;
+        acceptance_criteria: string | null;
+      }
     | undefined;
   if (!row) throw new Error(`Requirement ${requirementId} not found`);
   if (row.statement === trimmed) return;
@@ -104,15 +121,40 @@ export function editRequirement(requirementId: string, statement: string, review
   // Every stored field that quotes the statement is re-derived from the new
   // text in the same UPDATE. A field left behind here does not merely age: it
   // quotes words that are no longer on the page, next to the text that
-  // disproves it. `acceptance_criteria` is deliberately not touched - it is
-  // human-writable through setAcceptanceCriteria and the row carries no
-  // per-field provenance to tell a typed criterion from a derived one.
+  // disproves it. `acceptance_criteria` has no per-field provenance column, but
+  // `deriveAcceptanceCriteria` only ever returns the statement verbatim or
+  // null - so a copy of the OLD statement is a derived one and is refreshed,
+  // and anything else was typed by a reviewer and is left alone.
   const described = describeStatement(trimmed);
+  const acceptanceCriteria =
+    row.acceptance_criteria === row.statement ? described.acceptanceCriteria : row.acceptance_criteria;
+
+  // The module invariant (see the header) is that nothing the engine produced
+  // changes without an audit event saying what it said before. Re-derivation
+  // moves `priority` and `type`, which move project counts, so every derived
+  // field that actually changed is named in the audit detail.
+  const derivedChanges = (
+    [
+      ["Priority", row.priority, described.priority],
+      ["Type", row.type, described.type],
+      ["Binds on", row.binds_on, described.bindsOn],
+      ["Acceptance criteria", row.acceptance_criteria, acceptanceCriteria],
+      ["Rationale", row.rationale, described.rationale],
+      ["Classification evidence", row.classification_evidence, described.classificationEvidence],
+      ["Binds-on evidence", row.binds_on_evidence, described.bindsOnEvidence],
+    ] as ReadonlyArray<readonly [string, string | null, string | null]>
+  )
+    .filter(([, before, after]) => before !== after)
+    .map(
+      ([label, before, after]) =>
+        `${label} "${truncate(before ?? "none", 120)}" to "${truncate(after ?? "none", 120)}"`,
+    );
 
   transaction(() => {
     db.prepare(
       `UPDATE requirements SET statement = ?, type = ?, priority = ?, rationale = ?, classification_evidence = ?,
-         binds_on = ?, binds_on_evidence = ?, quality_score = ?, provenance = 'human', status = 'in_review', updated_at = ?
+         binds_on = ?, binds_on_evidence = ?, acceptance_criteria = ?, quality_score = ?,
+         provenance = 'human', status = 'in_review', updated_at = ?
        WHERE id = ?`,
     ).run(
       trimmed,
@@ -122,6 +164,7 @@ export function editRequirement(requirementId: string, statement: string, review
       described.classificationEvidence,
       described.bindsOn,
       described.bindsOnEvidence,
+      acceptanceCriteria,
       qualityScore(findings),
       now(),
       requirementId,
@@ -168,7 +211,9 @@ export function editRequirement(requirementId: string, statement: string, review
       "requirement",
       requirementId,
       "edited",
-      `Statement changed from "${truncate(row.statement, 120)}" to "${truncate(trimmed, 120)}". Re-analysis left ${findings.length} quality finding${findings.length === 1 ? "" : "s"}.`,
+      `Statement changed from "${truncate(row.statement, 120)}" to "${truncate(trimmed, 120)}". Re-analysis left ${findings.length} quality finding${findings.length === 1 ? "" : "s"}.${
+        derivedChanges.length ? ` Re-derived from the new wording: ${derivedChanges.join("; ")}.` : ""
+      }`,
       reviewer,
     );
   });
