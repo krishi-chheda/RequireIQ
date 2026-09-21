@@ -102,6 +102,29 @@ const DOMAIN_NOUNS = [
   "proposal", "bid", "submission", "solicitation", "awardee", "subcontractor", "firm",
 ];
 
+/**
+ * "bid" and "firm" are short enough to appear inside unrelated words -
+ * "confirm", "affirm", "firmware", "forbid", "bidirectional" - under plain
+ * substring matching. Measured: switching the *whole* list to word-boundary
+ * matching is more correct but is not free - it drops RFP yield (144 vs 146
+ * over the two sample PDFs) because several entries rely on a mid-word hit
+ * for an inflection substring matching also happens to allow. So only these
+ * two get the stricter, word-boundary-at-start check; everything else keeps
+ * plain substring matching, unchanged.
+ */
+const AMBIGUOUS_DOMAIN_NOUNS = new Set(["bid", "firm"]);
+const AMBIGUOUS_DOMAIN_NOUN_RE = new RegExp(
+  `\\b(?:${[...AMBIGUOUS_DOMAIN_NOUNS].join("|")})`,
+  "i",
+);
+
+function hasDomainNoun(statement: string, lower: string): boolean {
+  const plain = DOMAIN_NOUNS.some(
+    (noun) => !AMBIGUOUS_DOMAIN_NOUNS.has(noun) && lower.includes(noun),
+  );
+  return plain || AMBIGUOUS_DOMAIN_NOUN_RE.test(statement);
+}
+
 /** Sentences containing these are explicitly not requirements. */
 const META_MARKERS = [
   "not testable", "no decision taken", "carried as an open question",
@@ -165,7 +188,7 @@ export function extractFromDocument(input: ExtractionInput): ExtractionResult {
         rejected.push({ sentence: statement, reason: `Facilitation or process note (matched "${meta}").` });
         continue;
       }
-      if (!DOMAIN_NOUNS.some((noun) => lower.includes(noun))) {
+      if (!hasDomainNoun(statement, lower)) {
         rejected.push({ sentence: statement, reason: "No domain subject - conversational rather than buildable." });
         continue;
       }

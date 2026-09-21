@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { extractText, IngestError, ingestDocument } from "./ingest";
 import { cleanDocumentText } from "./ai/engine/structure";
+import { classifyBindsOn } from "./ai/engine/binds-on";
 
 const encode = (s: string) => new TextEncoder().encode(s);
 
@@ -106,6 +107,47 @@ describe("stored content and offsets", () => {
       // Windows keeps a lock on an open SQLite file, so the handle must close
       // before the temp directory can be removed - even when an assertion
       // above threw.
+      closeDb();
+      rmSync(dir, { recursive: true, force: true });
+      if (previousDbPath === undefined) delete process.env.REQUIREIQ_DB_PATH;
+      else process.env.REQUIREIQ_DB_PATH = previousDbPath;
+    }
+  });
+});
+
+describe("stored bindsOn", () => {
+  it("stores the classified bindsOn end to end, not the column default", async () => {
+    // `binds_on` is NOT NULL DEFAULT 'unknown', so dropping it from the
+    // requirements INSERT would silently store 'unknown' everywhere and no
+    // other test would notice. Asserting a *non*-unknown value is the point.
+    const dir = mkdtempSync(join(tmpdir(), "requireiq-bindson-"));
+    const previousDbPath = process.env.REQUIREIQ_DB_PATH;
+    process.env.REQUIREIQ_DB_PATH = join(dir, "test.db");
+
+    const { closeDb } = await import("./db");
+    try {
+      const queries = await import("./queries");
+      const projectId = queries.listProjects()[0]!.id;
+
+      const supplier = "The Contractor shall provide onsite training within thirty days of award.";
+      const system = "The solution shall support 500 concurrent users at peak load.";
+      expect(classifyBindsOn(supplier).bindsOn).toBe("supplier");
+
+      const result = ingestDocument({
+        projectId,
+        title: "Binding obligations excerpt",
+        filename: "binding.txt",
+        content: ["3.1 Obligations", "", supplier, "", system].join("\n"),
+      });
+      expect(result.requirements).toBeGreaterThan(0);
+
+      const stored = queries.listRequirements(projectId);
+      const row = stored.find((r) => r.statement.includes("onsite training"));
+      expect(row).toBeDefined();
+      expect(row!.bindsOn).toBe(classifyBindsOn(row!.statement).bindsOn);
+      expect(row!.bindsOn).not.toBe("unknown");
+      expect(row!.bindsOn).toBe("supplier");
+    } finally {
       closeDb();
       rmSync(dir, { recursive: true, force: true });
       if (previousDbPath === undefined) delete process.env.REQUIREIQ_DB_PATH;
