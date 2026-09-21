@@ -98,9 +98,11 @@ describe("extraction over the demo corpus", () => {
         requirement.evidence.startOffset,
         requirement.evidence.endOffset,
       );
-      expect(slice.replace(/\s+/g, " ").trim()).toContain(
-        requirement.statement.slice(0, 40).replace(/\s+/g, " ").trim(),
-      );
+      // Exact equality, not "the first 40 characters appear somewhere in the
+      // slice": the weak form hid offsets that pointed at a list marker the
+      // stored statement no longer carries. The only licensed difference is the
+      // whitespace collapse the statement itself documents.
+      expect(slice.replace(/\s+/g, " ").trim()).toBe(requirement.statement);
     }
   });
 

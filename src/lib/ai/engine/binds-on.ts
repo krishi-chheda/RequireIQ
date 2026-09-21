@@ -63,6 +63,16 @@ const CUES: Array<{ bindsOn: BindsOn; terms: string[] }> = [
   },
 ];
 
+/**
+ * Every actor cue, flattened.
+ *
+ * Exported so the extractor's commitment-modal guard ("The County will ..." is
+ * an obligation, "A final budget will ..." is narrative) can ask the same
+ * question this file answers, instead of carrying a second copy of the list
+ * that would drift away from it.
+ */
+export const ACTOR_TERMS: readonly string[] = CUES.flatMap((group) => group.terms);
+
 export function classifyBindsOn(statement: string): { bindsOn: BindsOn; evidence: string } {
   const lower = statement.toLowerCase();
 

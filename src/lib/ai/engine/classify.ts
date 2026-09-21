@@ -82,11 +82,48 @@ const CLASS_CUES: Record<RequirementType, Array<[string, number]>> = {
   ],
 };
 
-/** One word-start-anchored pattern per cue, compiled once at module load. */
+/**
+ * Cues whose prefix form collides with a longer, unrelated word, spelled out as
+ * explicit whole-word inflections instead.
+ *
+ * Start-anchoring cannot help where the cue *is* the prefix of the colliding
+ * word, and measured inside extracted statements each of these produced a real
+ * misclassification: "design" matched "designated" x3 and "designee" x1 - dense
+ * procurement vocabulary - labelling two submission-deadline clauses ux;
+ * "event" matched "eventual", labelling a public-inspection clause technical;
+ * "comprehen" matched "comprehensive", labelling an insurance clause ux;
+ * "sustain" matched "sustainable", labelling a double-sided-printing clause
+ * performance. "access" is here for a second reason as well: as a prefix it
+ * also fires on "accessibility", which the ux cue "accessib" already scores, so
+ * one word scored 4 across two classes and inflated the margin that feeds
+ * confidence.
+ *
+ * Every other cue keeps prefix matching, because it genuinely relies on it for
+ * inflections ("integrat" -> "integration", "submit" -> "submitted" x21).
+ */
+const WHOLE_WORD_CUES: Record<string, string[]> = {
+  access: ["access", "accesses", "accessed", "accessing"],
+  comprehen: ["comprehension", "comprehensible"],
+  design: ["design", "designs", "designed", "designing"],
+  event: ["event", "events"],
+  sustain: ["sustain", "sustains", "sustained", "sustaining"],
+};
+
+const escapeCue = (cue: string): string => cue.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** One pattern per cue, compiled once at module load. */
 const CUE_PATTERNS = new Map<string, RegExp>(
   Object.values(CLASS_CUES)
     .flat()
-    .map(([cue]) => [cue, new RegExp(`\\b${cue.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "i")] as const),
+    .map(([cue]) => {
+      const inflections = WHOLE_WORD_CUES[cue];
+      return [
+        cue,
+        inflections
+          ? new RegExp(`\\b(?:${inflections.map(escapeCue).join("|")})\\b`, "i")
+          : new RegExp(`\\b${escapeCue(cue)}`, "i"),
+      ] as const;
+    }),
 );
 
 export interface Classification {

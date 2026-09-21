@@ -68,6 +68,14 @@ export function cleanDocumentText(text: string): string {
  * REQUIREMENTS" while their children are written "4.1 Insurance"; without it
  * every top-level heading fell through and its whole section inherited the
  * previous sibling's locator.
+ *
+ * Being numbered is not enough on its own, though: PDF extraction wraps a long
+ * clause across lines, so "1. General Conditions. Contractor shall submit
+ * evidence of insurance as is required" (the continuation carries no terminal
+ * punctuation) reads as a numbered line too. Treating it as a heading eats the
+ * first line of the clause - measured at 4,204 body characters and three
+ * genuine "Contractor shall ..." obligations on one sample RFP. HEADING_MAX_WORDS
+ * is the discriminator: "4. CONTRACT REQUIREMENTS" is 2 words, that clause is 11.
  */
 const NUMBERED_CLAUSE = /^\s*(\d+(?:\.\d+)*)\.?\s+(\S.{0,90})$/;
 /** "C. SCOPE OF WORK" */
@@ -79,9 +87,9 @@ const COLON_HEADING = /^\s*([A-Z][A-Za-z0-9 &/,'()-]{2,60}):\s*$/;
 /**
  * A heading is a short label; an obligation sentence ("THE CONTRACTOR SHALL
  * MAINTAIN COMPLETE RECORDS...", "The solution shall support ... retention:")
- * is a full clause. Both CAPS_HEADING and COLON_HEADING can be short enough in
- * characters to pass their length caps while still reading as a sentence, so
- * both need this word-count guard too.
+ * is a full clause. CAPS_HEADING, COLON_HEADING and NUMBERED_CLAUSE can all be
+ * short enough in characters to pass their length caps while still reading as a
+ * sentence, so all three need this word-count guard too.
  */
 const HEADING_MAX_WORDS = 6;
 
@@ -96,7 +104,10 @@ export function detectHeading(line: string): string | null {
 
   const numbered = NUMBERED_CLAUSE.exec(line);
   if (numbered && !/[.!?]$/.test(line.trim())) {
-    return `${numbered[1]} ${numbered[2]!.trim()}`;
+    const body = numbered[2]!.trim();
+    if (body.split(/\s+/).length <= HEADING_MAX_WORDS) {
+      return `${numbered[1]} ${body}`;
+    }
   }
 
   const lettered = LETTERED_CLAUSE.exec(line);

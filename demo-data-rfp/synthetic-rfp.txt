@@ -52,6 +52,11 @@ Contractor shall submit evidence of insurance as is required herein.
 
 The successful Offeror shall provide training for up to forty staff users.
 
+4.1 Insurance
+
+1. General Conditions. Contractor shall procure and maintain a comprehensive
+general liability policy for the life of this Agreement.
+
 5. CITY OBLIGATIONS
 
 The City will provide test data within ten working days of contract award.

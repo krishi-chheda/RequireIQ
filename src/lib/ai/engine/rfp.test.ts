@@ -1,7 +1,8 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { chunkDocument } from "./text";
-import { extractFromDocument } from "./extract";
+import { extractFromDocument, obligationCoverage } from "./extract";
+import { detectHeading } from "./structure";
 import { detectConflicts, type ConflictSubject } from "./conflict";
 
 /**
@@ -31,10 +32,30 @@ describe("RFP success criteria", () => {
     expect(ratio).toBeGreaterThanOrEqual(0.8);
   });
 
-  it("recalls at least three quarters of the obligations", () => {
-    const obligations = (CONTENT.match(/\b(shall|must)\b/gi) ?? []).length;
-    const captured = result.requirements.length + result.constraints.length;
-    expect(captured / obligations).toBeGreaterThanOrEqual(0.75);
+  it("accounts for at least three quarters of the shall/must sentences", () => {
+    // The spec's criterion is per sentence: each shall/must sentence is either
+    // extracted or rejected for a reason other than vocabulary. A ratio of
+    // captured items to occurrences of "shall"/"must" is not the same question
+    // - nothing in it checks that the items captured *are* those sentences, and
+    // it measured above 100% on this very fixture.
+    const coverage = obligationCoverage(CONTENT, result);
+    expect(coverage.total).toBeGreaterThan(0);
+    expect(coverage.covered / coverage.total).toBeGreaterThanOrEqual(0.75);
+  });
+
+  it("reads a wrapped numbered clause as body text, not as a heading", () => {
+    // PDF extraction wraps a long clause across lines, and the first line then
+    // looks exactly like a numbered heading: it is numbered and, because the
+    // sentence continues overleaf, it carries no terminal punctuation. Treating
+    // it as a heading swallows the first line of the clause, which is how three
+    // "Contractor shall ..." obligations went missing from a real RFP.
+    expect(detectHeading("4. CONTRACT REQUIREMENTS")).toBe("4 CONTRACT REQUIREMENTS");
+    expect(
+      detectHeading("1. General Conditions. Contractor shall procure and maintain a comprehensive"),
+    ).toBeNull();
+    expect(
+      result.requirements.some((r) => r.statement.includes("Contractor shall procure and maintain")),
+    ).toBe(true);
   });
 
   it("invents no speakers in a document that is not a transcript", () => {

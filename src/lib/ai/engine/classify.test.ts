@@ -39,6 +39,31 @@ describe("classifyRequirement", () => {
     expect(classifyRequirement(statement).type).not.toBe(wrongType);
   });
 
+  /**
+   * Start-anchoring cannot help where the cue *is* the prefix of the colliding
+   * word. Each case below was a measured misclassification inside a statement
+   * the extractor actually registered, and each cue is now spelled out as
+   * explicit whole-word inflections.
+   */
+  it.each([
+    ['"design" inside "designated"', "It shall be the Respondent's sole risk to assure submission by the designated time.", "ux"],
+    ['"design" inside "designee"', "All offeror proposals must be received by the Procurement Manager or designee.", "ux"],
+    ['"event" inside "eventual"', "Confidential data shall be separable from the proposal to facilitate eventual public inspection.", "technical"],
+    ['"comprehen" inside "comprehensive"', "Contractor shall maintain a comprehensive general liability insurance policy.", "ux"],
+    ['"sustain" inside "sustainable"', "All submitted proposal documents shall be double-sided, adopting Sustainable Resource Management.", "performance"],
+  ])("does not classify on %s", (_case, statement, wrongType) => {
+    expect(classifyRequirement(statement).type).not.toBe(wrongType);
+  });
+
+  it("scores accessibility once, not once per class", () => {
+    // "accessibility" used to hit the ux cue "accessib" (3) and the security
+    // cue "access" (1), so one word scored 4 across two classes and widened the
+    // margin that feeds confidence. Only ux should see it now.
+    const result = classifyRequirement("The portal shall preserve public accessibility of every record.");
+    expect(result.type).toBe("ux");
+    expect(result.evidence).not.toContain('"access"');
+  });
+
   it("still matches an inflection of a cue, which is why whole-word matching was wrong", () => {
     // "record" -> "records", "integrat" -> "integration", "event" -> "events".
     expect(classifyRequirement("The platform shall keep records of every disposal.").type).toBe("compliance");
