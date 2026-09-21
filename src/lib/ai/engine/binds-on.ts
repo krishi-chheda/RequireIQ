@@ -28,6 +28,10 @@ export const BINDS_ON_LABEL: Record<BindsOn, string> = {
  * the actor: a proposal is the bidder's, so "Proposals must be submitted by
  * 3pm" binds the bidder. They classify, but they cannot commit - only a person
  * or an institution can - so `AGENT_SUBJECT` leaves them out.
+ *
+ * Two sigils on a cue string, read by `cueRegExp`:
+ *   `^term`  matches only at the start of the statement (subject position).
+ *   `term$`  matches the word exactly, refusing its inflections.
  */
 const CUES: Array<{ bindsOn: BindsOn; terms: string[]; documents?: string[] }> = [
   {
@@ -66,18 +70,31 @@ const CUES: Array<{ bindsOn: BindsOn; terms: string[]; documents?: string[] }> =
       "procurement manager", "purchasing division", "county personnel",
       "county staff", "city staff", "it department staff",
       // The article is not always written ("City will not open email submittal
-      // of the Proposal Response ..."). Measured over both real RFPs and the
-      // demo corpus, dropping it from these two is safe: every bare occurrence
-      // is the buying body, and a supplier or bidder cue still wins when it
-      // appears earlier in the sentence.
-      "city", "county", "the authority", "the agency", "the department",
+      // of the Proposal Response ..."), so these two also match bare - but only
+      // in subject position. "Earliest cue wins" stands in for "grammatical
+      // subject", and that stood while the cue required `the `; a bare noun
+      // also appears early as a modifier or an object, where it names what the
+      // clause is *about* rather than who it binds. Measured, four clauses were
+      // misassigned to the buyer that way ("The use of any and all City
+      // property by Selected Respondent ... must be approved", "... coverage
+      // for all operations performed for County by Contractor", "County's
+      // Proposals need to be submitted electronically via Dropbox", "Santa Fe
+      // County must be a named an additional insured on the Contractor's
+      // policy"), and the possessive is the same error one word later, so the
+      // anchored form declines it too.
+      "the city", "the county", "^city", "^county",
+      "the authority", "the agency", "the department",
       "the purchaser", "the bank", "the buyer",
     ],
   },
   {
     bindsOn: "system",
     terms: [
-      "the system", "the platform", "the solution", "the service",
+      // "the service$" declines its own plural on purpose: throughout a real
+      // county contract "the services" means the Contractor's services ("The
+      // services in section 1 (Contractor's Services) must be performed by the
+      // Contractor ..."), which is a supplier obligation, not a system one.
+      "the system", "the platform", "the solution", "the service$",
       "the application", "the software", "the product", "the interface",
       "the onboarding journey", "the portal",
     ],
@@ -99,7 +116,7 @@ const CUES: Array<{ bindsOn: BindsOn; terms: string[]; documents?: string[] }> =
  */
 export const AGENT_SUBJECT = new RegExp(
   `\\b(?:${CUES.flatMap((group) => group.terms)
-    .map((term) => term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    .map((term) => literal(term).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
     .join("|")})`,
   "i",
 );
@@ -114,11 +131,27 @@ export const AGENT_SUBJECT = new RegExp(
  * "city" inside "capacity", "electricity" and "publicity", which would label
  * every throughput requirement in the demo corpus a buyer obligation.
  */
+/** The cue word itself, with any sigil removed. */
+function literal(term: string): string {
+  return term.replace(/^\^/, "").replace(/\$$/, "");
+}
+
+function cueRegExp(term: string): RegExp {
+  const subjectOnly = term.startsWith("^");
+  const wholeWord = term.endsWith("$");
+  const body = literal(term).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  // A possessive is a modifier, never the subject: "County's Proposals need to
+  // be submitted ..." binds whoever submits them, not the County.
+  const head = subjectOnly ? "^" : "\\b";
+  const tail = `${wholeWord ? "\\b" : ""}${subjectOnly ? "(?!['’]s)\\b" : ""}`;
+  return new RegExp(`${head}${body}${tail}`, "i");
+}
+
 const ALL_CUES = CUES.map((group) => ({
   bindsOn: group.bindsOn,
   terms: [...group.terms, ...(group.documents ?? [])].map((term) => ({
-    term,
-    re: new RegExp(`\\b${term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "i"),
+    term: literal(term),
+    re: cueRegExp(term),
   })),
 }));
 

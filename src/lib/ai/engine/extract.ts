@@ -121,7 +121,30 @@ const OBLIGATION_PATTERNS: Array<{
 /** The subject of a commitment-modal sentence: everything before "will". */
 const COMMITMENT_SUBJECT = /^(.*?)\s+will\s+(?:not\s+)?[a-z]/;
 
+/**
+ * "will be <regular past participle>" - a commitment in the passive voice.
+ *
+ * `AGENT_SUBJECT` alone asks who acts, and the passive deliberately does not
+ * say; requiring a named actor dropped six Santa Fe commitments, four of them
+ * genuine buyer obligations carrying no shall/must, so the coverage metric
+ * never flagged them ("Proposals will be evaluated based upon a comparison of
+ * each Offeror's demonstrated ability ...", "All proposals will be reviewed for
+ * compliance with the mandatory specifications ...", "Proposals deemed
+ * non-responsive will be eliminated from further consideration.", "Responsive
+ * proposals will be evaluated using the factors in Section V."). An obligation
+ * stands whoever performs it, and where nobody is identifiable `classifyBindsOn`
+ * answers `unknown`, which surfaces for review rather than discarding it.
+ *
+ * Regular participles only, which is what keeps the two announcements out: "A
+ * Pre-Proposal Conference will be held ..." is irregular and "Request for
+ * Proposals will be available ..." is an adjective. Measured, that separates
+ * all six with no special case - the ceiling is an irregular passive
+ * ("undertaken", "withdrawn"), which would be missed, not misread.
+ */
+const PASSIVE_COMMITMENT = /\bwill\s+(?:not\s+)?be\s+\w+ed\b/i;
+
 function hasActorSubject(statement: string): boolean {
+  if (PASSIVE_COMMITMENT.test(statement)) return true;
   const subject = COMMITMENT_SUBJECT.exec(statement)?.[1]?.toLowerCase();
   return subject !== undefined && AGENT_SUBJECT.test(subject);
 }
@@ -366,6 +389,15 @@ export interface ObligationCoverage {
  * sentences, not a ratio of two counts: dividing "things captured" by "times
  * 'shall' appears" says nothing about whether the things captured are the
  * shall/must sentences, and measured over real documents it exceeded 100%.
+ *
+ * Known blind spot, deliberately not papered over: `total` is counted from
+ * `candidateStatements`, which runs downstream of `chunkDocument`. A sentence
+ * mistaken for a heading is dropped from both sides of the ratio, so this
+ * metric cannot see that class of loss and would score it as perfect coverage.
+ * It stays latent because `isLabel` forbids a whole shall/must line from
+ * becoming a heading and no requirement statement in either sample RFP starts
+ * lower-case; the fix is to count over the raw text, which is a separate piece
+ * of work. Heading regressions are measured directly instead.
  */
 export function obligationCoverage(content: string, result: ExtractionResult): ObligationCoverage {
   const accounted = new Set<string>();

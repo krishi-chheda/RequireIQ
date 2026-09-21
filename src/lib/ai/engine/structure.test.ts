@@ -132,6 +132,76 @@ describe("detectHeading", () => {
     ).toBeNull();
   });
 
+  it.each([
+    // A section title may name a modal. The modal test is narrowed to a modal
+    // with two or more words after it - a clause, not a title's trailing verb -
+    // and the hyphen guard keeps "Will-Call" and "Shall-Statements" out of it.
+    ["5. INSURANCE THE CONTRACTOR SHALL CARRY", "5 INSURANCE THE CONTRACTOR SHALL CARRY"],
+    ["7. Documents Bidders Must Submit", "7 Documents Bidders Must Submit"],
+    ["3.2 Optional Services the County May Request", "3.2 Optional Services the County May Request"],
+    ["4. Will-Call Pickup Instructions", "4 Will-Call Pickup Instructions"],
+    ["8. Shall-Statements Index", "8 Shall-Statements Index"],
+  ])("reads the modal-bearing section title %j as a heading", (line, expected) => {
+    expect(detectHeading(line)).toBe(expected);
+  });
+
+  it.each([
+    // The modal test still earns its place: at the ten-word cap these three are
+    // the lines it alone keeps out, and each one is an obligation or a list
+    // stem whose text would be deleted from the document by promoting it.
+    "The selected firm shall provide the following services:",
+    "The evaluation process will follow the steps listed below:",
+    "ALL OFFEROR PROPOSALS MUST BE RECEIVED FOR REVIEW AND",
+  ])("does not read the wrapped clause %j as a heading", (line) => {
+    expect(detectHeading(line)).toBeNull();
+  });
+
+  it.each([
+    // Sentence segmentation is asked of `splitSentences`, the splitter the rest
+    // of the engine reads sentences with. A private "[.!?]\\s" regex called each
+    // of these two sentences and demoted a real heading to body.
+    ["2 Population Served Approx. 26,000", "2 Population Served Approx. 26,000"],
+    ["15 U.S. Bank Bank portal", "15 U.S. Bank Bank portal"],
+    ["1. U.S. Bank Reconciliation", "1 U.S. Bank Reconciliation"],
+    ["2. Sec. 5 Compliance", "2 Sec. 5 Compliance"],
+    ["6. Mr. Smith's Responsibilities", "6 Mr. Smith's Responsibilities"],
+  ])("reads %j as a heading, abbreviations and all", (line, expected) => {
+    expect(detectHeading(line)).toBe(expected);
+  });
+
+  it.each([
+    // Wrapped *narrative* carries neither a sentence boundary nor a modal, so
+    // structure alone cannot see it. A heading names its section: it does not
+    // open mid-sentence and it does not end on a function word.
+    "1099 creation is outsourced to a third-party vendor due to",
+    "2.9.1. Project Management Plan: a detailed Implementation Project Plan that, at a minimum,",
+    "EVALUATION BY THE PROCUREMENT MANAGER OR DESIGNEE NO",
+    "BETWEEN SANTA FE COUNTY AND",
+    "The City estimates that:",
+  ])("does not read the mid-sentence fragment %j as a heading", (line) => {
+    expect(detectHeading(line)).toBeNull();
+  });
+
+  it("exempts a two-word label from the dangling-word rule", () => {
+    // "APPENDIX A" ends in what looks like an article. It is a label.
+    expect(detectHeading("APPENDIX A")).toBe("APPENDIX A");
+  });
+
+  it("reads the same words the same way whether or not a clause number precedes them", () => {
+    // The property no test pinned, and the reason ALL-CAPS lines no longer hold
+    // a cap of their own: a per-form exception made "12. PUBLICATION ..." a
+    // heading while the identical line without its number was body. Every form
+    // shares `isLabel`, and `detectHeading` tries the numbered form first, so a
+    // reorder or a reinstated per-form rule fails here.
+    const title = "PUBLICATION, REPRODUCTION AND USE OF MATERIAL COPYRIGHT";
+    expect(detectHeading(`12. ${title}`)).toBe(`12 ${title}`);
+    expect(detectHeading(title)).toBe(title);
+
+    const tooLong = "RESPONSES RECEIVED AFTER THE STATED DEADLINE ARE REJECTED WITHOUT ANY FURTHER REVIEW";
+    expect(detectHeading(`13. ${tooLong}`)).toBeNull();
+    expect(detectHeading(tooLong)).toBeNull();
+  });
+
   it("does not read an unpunctuated all-caps obligation sentence as a heading", () => {
     // 77 chars, inside CAPS_HEADING's 80-char cap, and no terminal [.!?] to
     // trip the punctuation guard used elsewhere - the char cap alone lets it

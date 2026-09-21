@@ -56,6 +56,38 @@ describe("classifyBindsOn", () => {
   });
 
   it.each([
+    // The article-free cue matches only in subject position. "Earliest cue
+    // wins" stands in for "grammatical subject", and a bare noun also turns up
+    // early as a modifier, an object or a possessive, where it names what the
+    // clause is about rather than who it binds.
+    "The use of any and all City property by Selected Respondent or its agents must be approved.",
+    "Said policies of insurance shall include coverage for all operations performed for County by Contractor.",
+    "County's Proposals need to be submitted electronically via Dropbox at the link provided.",
+    "Santa Fe County must be a named an additional insured on the Contractor's policy.",
+  ])("does not read the buyer as the subject of %j", (statement) => {
+    expect(classifyBindsOn(statement).bindsOn).not.toBe("buyer");
+  });
+
+  it.each([
+    "City will not open email submittal of the Proposal Response prior to submission deadline.",
+    "County personnel will not merge, collate, or assemble proposal materials.",
+    "The Evaluation Committee will reject the proposal of any offeror who fails to comply.",
+    "The Procurement Specialist will schedule the time for each offeror presentation.",
+  ])("still reads %j as binding the buyer", (statement) => {
+    expect(classifyBindsOn(statement).bindsOn).toBe("buyer");
+  });
+
+  it("does not read the contractor's services as the system", () => {
+    // Throughout a real county contract "the services" means the Contractor's
+    // services, so the system cue "the service" declines its own plural.
+    const result = classifyBindsOn(
+      "The services in section 1 (Contractor's Services) must be performed by the Contractor.",
+    );
+    expect(result.bindsOn).toBe("supplier");
+    expect(classifyBindsOn("The service must be available 99.9% of the time.").bindsOn).toBe("system");
+  });
+
+  it.each([
     ["Vendors shall provide three references upon request.", "supplier"],
     ["Suppliers shall maintain liability insurance of at least $1,000,000.", "supplier"],
   ])("reads the plural form %j the same as the singular", (statement, expected) => {

@@ -33,6 +33,11 @@ export interface Chunk {
 const ABBREVIATIONS = new Set([
   "mr", "mrs", "ms", "dr", "prof", "sr", "jr", "st", "no", "vs", "etc", "eg",
   "ie", "approx", "dept", "inc", "ltd", "plc", "co", "fig", "al",
+  // "Sec. 5" is a cross-reference, not a sentence end. It appears nowhere in
+  // the sample RFPs, the fixture or the demo corpus, so this costs nothing
+  // there; it is here because `detectHeading` now asks this splitter whether a
+  // clause title is one sentence, and "2. Sec. 5 Compliance" is one.
+  "sec",
 ]);
 
 /**

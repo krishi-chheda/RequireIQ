@@ -10,6 +10,8 @@
  * the offsets recorded against it.
  */
 
+import { splitSentences } from "./text";
+
 /** Page-number furniture, e.g. "Page 8 of 34", "- 12 -", a bare numeral. */
 const PAGE_NUMBER = /^\s*(?:page\s+\d+(?:\s+of\s+\d+)?|-\s*\d+\s*-|\d{1,4})\s*$/i;
 
@@ -80,41 +82,77 @@ const COLON_HEADING = /^\s*([A-Z][A-Za-z0-9 &/,'()-]{2,60}):\s*$/;
  * A heading is a label; an obligation clause wrapped across lines by PDF
  * extraction ("1. General Conditions. Contractor shall procure and maintain a
  * comprehensive") looks like one, because the sentence continues overleaf and
- * so the first line carries no terminal punctuation either.
+ * so the first line carries no terminal punctuation either. Reading one as a
+ * heading is not a cosmetic error: `chunkDocument` drops a heading line from
+ * the body it chunks, so the text disappears from the document the extractor
+ * sees, and the orphaned continuation is then cited to a sentence fragment.
  *
- * Word count is the wrong discriminator. Measured over two real RFPs and the
- * demo corpus, a cap of six demoted 45 genuine headings ("5.19 Compliance with
- * Federal, State, County, and Local Laws", "12. PUBLICATION, REPRODUCTION, AND
- * USE OF MATERIAL; COPYRIGHT") to body, which merged whole sections into their
- * predecessor and cited their obligations to the *previous* section number - a
- * wrong citation, worse than a generic one. Raising the cap to nine rescues
- * those but readmits the wrapped clauses, which are nine words too.
+ * `isLabel` is the whole discriminator and ALL FOUR heading forms share it,
+ * every clause of it. That uniformity is the rule, not an accident: the same
+ * words must be read the same way whether or not a clause number precedes
+ * them, and a per-form exception is how "12. PUBLICATION, REPRODUCTION AND USE
+ * OF MATERIAL COPYRIGHT" came to be a heading while the identical line without
+ * its number was body. `detectHeading`'s form ordering is pinned by test.
  *
- * The two cases differ structurally, not by length: a wrapped clause carries an
- * internal sentence boundary, an obligation modal, or both; a heading carries
- * neither. Measured, that rule rescues all 45 and still rejects every wrapped
- * clause. All four heading forms share it.
+ * Three clauses, each measured against two real RFPs, the fixture and the demo
+ * corpus:
+ *
+ *  - No internal sentence boundary. Asked of `splitSentences`, the splitter the
+ *    rest of the engine reads sentences with, rather than a private `[.!?]\s`
+ *    regex: that regex called "2 Population Served Approx. 26,000" and "15 U.S.
+ *    Bank Bank portal" two sentences apiece and demoted both to body.
+ *  - No mid-clause modal. A section title may name a modal ("7. Documents
+ *    Bidders Must Submit"), so the test is narrowed to a modal with two or more
+ *    words after it, which is a clause and not a title's trailing verb. Still
+ *    load-bearing at the cap below: without it "The selected firm shall provide
+ *    the following services:", "The evaluation process will follow the steps
+ *    listed below:" and "ALL OFFEROR PROPOSALS MUST BE RECEIVED FOR REVIEW AND"
+ *    are all promoted to headings and their text is deleted.
+ *  - At most ten words. Structure alone is not enough, because wrapped
+ *    *narrative* carries neither a boundary nor a modal - "1099 creation is
+ *    outsourced to a third-party vendor due to" is a mid-sentence fragment by
+ *    any reading. Measured over both PDFs, mid-sentence headings by cap (real
+ *    headings rescued in brackets): 6 -> 7 (0/6), 9 -> 9 (6/6), 10 -> 9 (6/6),
+ *    11 -> 12, 12 -> 15, 14 -> 19, uncapped -> 23. Ten is the largest cap that
+ *    costs nothing; the longest genuine heading in either document ("2.2
+ *    Alternate Proposals, Partnerships and Proposers of Subsets of
+ *    Functionality") is nine words.
+ *  - Title-cased first word. A heading names its section; it does not open
+ *    mid-sentence. This is what tells "1099 creation is outsourced to a
+ *    third-party vendor due to" (nine words, no boundary, no modal - a wrapped
+ *    narrative line whose deletion orphaned its continuation into a chunk
+ *    located at the deleted sentence) from a real clause title. Measured, it
+ *    demotes that line and no other in either PDF, the fixture or the demo
+ *    corpus; CAPS_HEADING and COLON_HEADING already required it in their own
+ *    patterns, so this only extends the same demand to the clause forms.
+ *  - No dangling function word at the end. The mirror of the clause above, and
+ *    what lets the cap stay uniform: an ALL-CAPS clause wraps like any other
+ *    but its continuation lines carry no case signal to read, which is why
+ *    CAPS_HEADING used to hold a tighter cap of its own - the very
+ *    form-specific exception this rule exists to remove. A title does not end
+ *    on "OR", "AND" or "NO". Measured, it demotes exactly four lines across
+ *    both PDFs and the fixture, every one of them a fragment: "EVALUATION BY
+ *    THE PROCUREMENT MANAGER OR DESIGNEE NO", "BETWEEN SANTA FE COUNTY AND",
+ *    "The City estimates that:", "The Contractor represents that:". Two words
+ *    or fewer are exempt, because "APPENDIX A" is a heading and its "A" is a
+ *    label, not an article.
  */
-const SENTENCE_BOUNDARY = /[.!?]\s+\S/;
-const OBLIGATION_MODAL = /\b(?:shall|must|should|may|will)\b/i;
+const OBLIGATION_MODAL = /(?<![\w-])(?:shall|must|should|may|will)(?![\w-])(?:\s+\S+){2,}/i;
+const HEADING_MAX_WORDS = 10;
+const TITLE_START = /^[A-Z0-9"'(]/;
+const DANGLING_END =
+  /\b(?:a|an|the|and|or|but|nor|of|to|in|on|for|with|at|by|from|as|is|are|was|were|be|been|that|which|who|no|not|if|than|then|will|shall|may|must|its|their|his|her|our|your|any|all|each|such|upon|into|under|over|per|so|when|where|while|about|between|through|against|before|after|during|including|has|have|had|this|these|those|it|they|we|you|he|she)\W*$/i;
 
 function isLabel(body: string): boolean {
-  return !SENTENCE_BOUNDARY.test(body) && !OBLIGATION_MODAL.test(body);
+  const words = body.split(/\s+/);
+  return (
+    TITLE_START.test(body) &&
+    words.length <= HEADING_MAX_WORDS &&
+    (words.length <= 2 || !DANGLING_END.test(body)) &&
+    splitSentences(body).length <= 1 &&
+    !OBLIGATION_MODAL.test(body)
+  );
 }
-
-/**
- * ALL-CAPS lines keep a length cap on top of `isLabel`, and only they do.
- *
- * A caps clause wraps like any other, but its continuation lines ("EVALUATION
- * BY THE PROCUREMENT MANAGER OR DESIGNEE NO", "NOT THEY, THEIR FAMILY MEMBER,
- * OR THEIR REPRESENTATIVE HAS MADE ANY") carry the modal and the sentence
- * boundary in the *first* line, not in themselves - there is no case signal
- * left to read, so length is all that is left. Measured, the cap costs nothing
- * here: every caps line it demotes is such a continuation, and the one caps
- * heading long enough to need rescuing ("12. PUBLICATION, REPRODUCTION, AND USE
- * OF MATERIAL; COPYRIGHT") is numbered, so NUMBERED_CLAUSE reads it first.
- */
-const CAPS_HEADING_MAX_WORDS = 6;
 
 /**
  * Reads a heading from one line, or null.
@@ -139,10 +177,7 @@ export function detectHeading(line: string): string | null {
   }
 
   const caps = CAPS_HEADING.exec(line);
-  if (caps) {
-    const body = caps[1]!.trim();
-    if (isLabel(body) && body.split(/\s+/).length <= CAPS_HEADING_MAX_WORDS) return body;
-  }
+  if (caps && isLabel(caps[1]!.trim())) return caps[1]!.trim();
 
   const colon = COLON_HEADING.exec(line);
   if (colon && isLabel(colon[1]!.trim())) return colon[1]!.trim();

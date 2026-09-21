@@ -455,6 +455,28 @@ describe("the extractor's own boundaries", () => {
   });
 
   it.each([
+    // Passive-voice commitments. Requiring a named actor dropped four genuine
+    // buyer obligations from one RFP, none of them carrying shall/must, so the
+    // coverage metric never saw them go.
+    "Proposals will be evaluated based upon a comparison of each Offeror's demonstrated ability.",
+    "All proposals will be reviewed for compliance with the mandatory specifications in the RFP.",
+    "Proposals deemed non-responsive will be eliminated from further consideration.",
+    "Responsive proposals will be evaluated using the factors in Section V.",
+  ])("registers the passive commitment %j", (sentence) => {
+    expect(extract(sentence).requirements).toHaveLength(1);
+  });
+
+  it.each([
+    // Announcements, not obligations, and separated with no special case:
+    // "held" is an irregular participle and "available" is an adjective, so
+    // neither satisfies the regular "will be ...ed" form.
+    "A Pre-Proposal Conference will be held Tuesday, July 14, 2026 at the County offices.",
+    "Request for Proposals will be available by contacting the Procurement Office.",
+  ])("does not read the announcement %j as a commitment", (sentence) => {
+    expect(extract(sentence).requirements).toHaveLength(0);
+  });
+
+  it.each([
     "Until that change lands, the two documents will appear to disagree with each other.",
     "If the new platform only serves direct applicants we will be running two systems.",
   ])("does not read narrative consequence as a commitment: %j", (sentence) => {
