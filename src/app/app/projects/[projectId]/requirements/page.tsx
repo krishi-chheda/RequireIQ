@@ -43,7 +43,9 @@ export const metadata: Metadata = { title: "Requirements register" };
 const VIEWS = ["findings", "unowned", "no-acceptance", "post-baseline", "constraints"] as const;
 const STATUSES: ReviewStatus[] = ["proposed", "in_review", "needs_clarification", "approved", "rejected"];
 const PRIORITIES: Priority[] = ["must", "should", "could", "wont"];
-const BINDS_ON: BindsOn[] = ["system", "supplier", "bidder", "buyer", "unknown"];
+// Derived, not hand-listed: a new BindsOn value gets a chip and a URL filter by
+// existing, rather than by someone remembering this line.
+const BINDS_ON = Object.keys(BINDS_ON_LABEL) as BindsOn[];
 
 export default async function RequirementsPage({
   params,

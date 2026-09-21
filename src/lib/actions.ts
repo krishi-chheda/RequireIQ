@@ -3,6 +3,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import { getDb, transaction } from "./db";
 import { analyseAmbiguity, qualityScore } from "./ai/engine/ambiguity";
+import { describeStatement } from "./ai/engine/extract";
 import type { ConflictStatus, ReviewStatus } from "./types";
 
 /**
@@ -100,12 +101,31 @@ export function editRequirement(requirementId: string, statement: string, review
   if (row.statement === trimmed) return;
 
   const findings = analyseAmbiguity(trimmed);
+  // Every stored field that quotes the statement is re-derived from the new
+  // text in the same UPDATE. A field left behind here does not merely age: it
+  // quotes words that are no longer on the page, next to the text that
+  // disproves it. `acceptance_criteria` is deliberately not touched - it is
+  // human-writable through setAcceptanceCriteria and the row carries no
+  // per-field provenance to tell a typed criterion from a derived one.
+  const described = describeStatement(trimmed);
 
   transaction(() => {
     db.prepare(
-      `UPDATE requirements SET statement = ?, quality_score = ?, provenance = 'human', status = 'in_review', updated_at = ?
+      `UPDATE requirements SET statement = ?, type = ?, priority = ?, rationale = ?, classification_evidence = ?,
+         binds_on = ?, binds_on_evidence = ?, quality_score = ?, provenance = 'human', status = 'in_review', updated_at = ?
        WHERE id = ?`,
-    ).run(trimmed, qualityScore(findings), now(), requirementId);
+    ).run(
+      trimmed,
+      described.type,
+      described.priority,
+      described.rationale,
+      described.classificationEvidence,
+      described.bindsOn,
+      described.bindsOnEvidence,
+      qualityScore(findings),
+      now(),
+      requirementId,
+    );
 
     // Old findings referred to spans in the old text, so they are replaced
     // wholesale rather than merged. Re-analysis is what makes a rewrite

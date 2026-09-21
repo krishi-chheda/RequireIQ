@@ -251,6 +251,41 @@ describe("human-in-the-loop review", () => {
     expect(findings.some((a) => a.span.toLowerCase() === "fast")).toBe(false);
   });
 
+  it("re-derives every statement-quoting field when the actor changes", () => {
+    // The failure this pins: a field that keeps quoting the old wording is not
+    // stale, it is a sentence disproved by the statement printed next to it.
+    const requirement = queries
+      .listRequirements(projectId)
+      .find((r) => r.bindsOn !== "supplier" && r.type !== "security")!;
+    expect(requirement.bindsOnEvidence).toBeTruthy();
+
+    const rewritten =
+      "The Contractor shall encrypt every stored customer credential at rest and rotate the encryption key every 90 days.";
+    actions.editRequirement(requirement.id, rewritten, "Test Reviewer");
+
+    const after = queries.getRequirement(requirement.id)!;
+    expect(after.statement).toBe(rewritten);
+    expect(after.bindsOn).toBe("supplier");
+    expect(after.bindsOnEvidence).toContain("contractor");
+    expect(after.bindsOnEvidence).not.toBe(requirement.bindsOnEvidence);
+    expect(after.type).toBe("security");
+    expect(after.classificationEvidence).toContain("encrypt");
+    expect(after.classificationEvidence).not.toBe(requirement.classificationEvidence);
+    expect(after.priority).toBe("must");
+    expect(after.rationale).toContain("90 days");
+
+    // Nothing that quotes a matched term may quote a word the statement no
+    // longer contains. (`rationale` also carries fixed rule labels such as
+    // 'Binding modal ("must"/"shall")', which name the rule rather than
+    // claiming a match, so it is asserted field by field above.)
+    const lower = rewritten.toLowerCase();
+    for (const field of [after.bindsOnEvidence ?? "", after.classificationEvidence]) {
+      for (const [, quoted] of field.matchAll(/"([a-z0-9][a-z0-9 -]*)"/gi)) {
+        expect(lower).toContain(quoted!.toLowerCase());
+      }
+    }
+  });
+
   it("resolves a conflict and records the resolution note", () => {
     const conflict = queries.listConflicts(projectId).find((c) => c.status === "open")!;
 

@@ -214,45 +214,55 @@ export function extractFromDocument(input: ExtractionInput): ExtractionResult {
         continue;
       }
 
-      // classifyBindsOn never gates extraction - `unknown` is an honest
-      // outcome that surfaces for review, not a reason to discard a real
-      // obligation (see docs/superpowers/specs/2026-09-16-rfp-ingestion-p1-design.md).
-      const binding = classifyBindsOn(statement);
-      requirements.push(buildRequirement(statement, obligation, evidence, speakerId, input.kind, binding));
+      // classifyBindsOn (inside describeStatement) never gates extraction -
+      // `unknown` is an honest outcome that surfaces for review, not a reason
+      // to discard a real obligation (see
+      // docs/superpowers/specs/2026-09-16-rfp-ingestion-p1-design.md).
+      requirements.push(buildRequirement(statement, evidence, speakerId, input.kind));
     }
   }
 
   return { requirements, constraints, rejected };
 }
 
-function buildRequirement(
-  statement: string,
-  obligation: { strength: number; label: string },
-  evidence: ExtractedEvidence,
-  ownerStakeholderId: string | null,
-  kind: string,
-  binding: { bindsOn: BindsOn; evidence: string },
-): ExtractedRequirement {
+/**
+ * Everything a requirement row stores that is read out of the statement text.
+ *
+ * Both writers of a requirement go through here - the extractor at ingest, and
+ * `editRequirement` after a human rewrite - so no stored field can go on
+ * quoting words the current statement no longer contains. Adding a derived
+ * field here is what makes it survive an edit; adding it at a call site is not.
+ */
+export interface StatementDescription {
+  type: RequirementType;
+  priority: Priority;
+  rationale: string;
+  classificationEvidence: string;
+  bindsOn: BindsOn;
+  bindsOnEvidence: string;
+  acceptanceCriteria: string | null;
+  /** Reading-confidence inputs. Only the extractor scores them, at ingest. */
+  obligationStrength: number;
+  classificationMargin: number;
+  quantityCount: number;
+  hedged: boolean;
+}
+
+export function describeStatement(statement: string): StatementDescription {
+  const lower = statement.toLowerCase();
+  const obligation = OBLIGATION_PATTERNS.find((p) => p.re.test(statement));
   const classification = classifyRequirement(statement);
   const { priority, evidence: priorityEvidence } = classifyPriority(statement);
   const quantities = extractQuantities(statement);
-  const lower = statement.toLowerCase();
-
-  // Confidence is a reading confidence: how sure the extractor is that this
-  // sentence is a requirement and was read correctly. It is NOT a claim about
-  // whether the requirement is a good idea.
-  let confidence = 0.5 + obligation.strength * 0.25;
-  if (quantities.length > 0) confidence += 0.08;
-  if (ownerStakeholderId) confidence += 0.06;
-  confidence += KIND_WEIGHT[kind] ?? 0;
-  confidence += classification.margin * 0.08;
+  const binding = classifyBindsOn(statement);
+  // A human can rewrite a statement into one with no modal at all; the
+  // extractor never reaches here without one.
   const hedge = HEDGES.find((h) => lower.includes(h));
-  if (hedge) confidence -= 0.15;
-  if (statement.length > 240) confidence -= 0.05;
-  confidence = Math.max(0.35, Math.min(0.98, confidence));
 
   const reasons = [
-    `Detected ${obligation.label} in source sentence`,
+    obligation
+      ? `Detected ${obligation.label} in source sentence`
+      : "No obligation modal found in the statement",
     priorityEvidence,
     quantities.length
       ? `Carries ${quantities.length} measurable quantity value${quantities.length === 1 ? "" : "s"} (${quantities
@@ -264,17 +274,52 @@ function buildRequirement(
   ].filter(Boolean);
 
   return {
-    statement,
     type: classification.type,
     priority,
-    confidence: Number(confidence.toFixed(2)),
     rationale: `${reasons.join(". ")}.`,
     classificationEvidence: classification.evidence,
-    ownerStakeholderId,
-    evidence,
-    acceptanceCriteria: deriveAcceptanceCriteria(statement, quantities.length > 0),
     bindsOn: binding.bindsOn,
     bindsOnEvidence: binding.evidence,
+    acceptanceCriteria: deriveAcceptanceCriteria(statement, quantities.length > 0),
+    obligationStrength: obligation?.strength ?? 0,
+    classificationMargin: classification.margin,
+    quantityCount: quantities.length,
+    hedged: Boolean(hedge),
+  };
+}
+
+function buildRequirement(
+  statement: string,
+  evidence: ExtractedEvidence,
+  ownerStakeholderId: string | null,
+  kind: string,
+): ExtractedRequirement {
+  const described = describeStatement(statement);
+
+  // Confidence is a reading confidence: how sure the extractor is that this
+  // sentence is a requirement and was read correctly. It is NOT a claim about
+  // whether the requirement is a good idea.
+  let confidence = 0.5 + described.obligationStrength * 0.25;
+  if (described.quantityCount > 0) confidence += 0.08;
+  if (ownerStakeholderId) confidence += 0.06;
+  confidence += KIND_WEIGHT[kind] ?? 0;
+  confidence += described.classificationMargin * 0.08;
+  if (described.hedged) confidence -= 0.15;
+  if (statement.length > 240) confidence -= 0.05;
+  confidence = Math.max(0.35, Math.min(0.98, confidence));
+
+  return {
+    statement,
+    type: described.type,
+    priority: described.priority,
+    confidence: Number(confidence.toFixed(2)),
+    rationale: described.rationale,
+    classificationEvidence: described.classificationEvidence,
+    ownerStakeholderId,
+    evidence,
+    acceptanceCriteria: described.acceptanceCriteria,
+    bindsOn: described.bindsOn,
+    bindsOnEvidence: described.bindsOnEvidence,
   };
 }
 
