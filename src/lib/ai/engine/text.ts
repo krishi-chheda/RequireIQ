@@ -319,8 +319,19 @@ export function extractQuantities(text: string): Quantity[] {
   const found: Quantity[] = [];
   const seen = new Set<number>();
 
+  /**
+   * A number inside a hyphenated alphanumeric token is a name, not a measure:
+   * AES-256, SHA-256, ISO-8601, UTF-8, and the statute citations real RFPs are
+   * full of ("NMSA 1978, Section 13-1-116"). Guarded here rather than in one
+   * pattern because every caller of `extractQuantities` inherits the reading -
+   * the ingest confidence bonus, the conflict detectors, and the rationale
+   * `editRequirement` re-derives and writes into the audit trail.
+   */
+  const named = (start: number): boolean =>
+    text[start - 1] === "-" && /[A-Za-z0-9]/.test(text[start - 2] ?? "");
+
   const push = (q: Quantity): void => {
-    if (seen.has(q.start)) return;
+    if (seen.has(q.start) || named(q.start)) return;
     seen.add(q.start);
     found.push(q);
   };

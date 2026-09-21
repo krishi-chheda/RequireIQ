@@ -100,6 +100,24 @@ describe("extractQuantities", () => {
     expect(days!.value).toBe(30 * 86_400);
   });
 
+  it("does not read a number inside a hyphenated name as a quantity", () => {
+    // "AES-256 at rest" was being read as the count "256 rest", which reached
+    // the rationale a reviewer sees on a human-edited row and the old -> new
+    // line written into the audit trail. The statute citations real RFPs carry
+    // are the same shape: over both sample RFPs, the fixture and the demo
+    // corpus this removes exactly three readings (13-1-29, 13-1-116, 13-1-172)
+    // and no genuine quantity.
+    expect(
+      extractQuantities("The solution shall encrypt every stored record using AES-256 at rest."),
+    ).toEqual([]);
+    expect(
+      extractQuantities("Pursuant to NMSA 1978, Section 13-1-116, the contents are confidential."),
+    ).toEqual([]);
+    // The hyphen after a number still binds it to its unit: "12-week" is real.
+    const weeks = extractQuantities("A 12-week observation period is required.");
+    expect(weeks[0]!.dimension).toBe("duration");
+  });
+
   it("parses percentages and dates", () => {
     expect(extractQuantities("must achieve 99.99% availability")[0]!.value).toBe(99.99);
     const date = extractQuantities("The platform must go live on 2 March 2027.")[0]!;

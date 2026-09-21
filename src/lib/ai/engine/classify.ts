@@ -21,9 +21,11 @@ import { extractQuantities } from "./text";
  * as performance on "load", "a separate capital request" as technical on
  * "api", "speaker identification" as performance on "peak", "a seamless
  * transition" as compliance on "aml", and "prevent the delayed" as technical
- * on "event" - 2 statements in the demo corpus and 7 across the two sample
- * RFPs. Whole-word matching would fix those too but costs 10 and 28
- * respectively, because it also throws away the inflections the cues rely on.
+ * on "event". Re-measured over the demo corpus and both sample RFPs by
+ * swapping the pattern below for a bare substring match: substring matching
+ * relabels 1 demo-corpus statement and 8 of the 190 RFP statements. Whole-word
+ * matching would fix those too but relabels 8 and 18, because it also throws
+ * away the inflections the cues rely on.
  */
 const CLASS_CUES: Record<RequirementType, Array<[string, number]>> = {
   performance: [

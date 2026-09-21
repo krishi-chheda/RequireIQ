@@ -13,6 +13,7 @@ import {
 import { z } from "@/lib/validate";
 import {
   BINDS_ON_LABEL,
+  BINDS_ON_SHORT,
   PRIORITY_LABEL,
   REQUIREMENT_TYPES,
   REQUIREMENT_TYPE_LABEL,
@@ -46,6 +47,16 @@ const PRIORITIES: Priority[] = ["must", "should", "could", "wont"];
 // Derived, not hand-listed: a new BindsOn value gets a chip and a URL filter by
 // existing, rather than by someone remembering this line.
 const BINDS_ON = Object.keys(BINDS_ON_LABEL) as BindsOn[];
+
+/**
+ * Raised from the default 980 when the Binds-on column was added.
+ *
+ * Fixed column widths that sum past the table's min-width squeeze the one
+ * flexible column instead, which is how the statement column was once crushed
+ * to 157px. Measured in the browser at this min-width, statement holds 326px -
+ * the same as it held before the column was added.
+ */
+const TABLE_MIN_WIDTH = 1084;
 
 export default async function RequirementsPage({
   params,
@@ -179,12 +190,13 @@ export default async function RequirementsPage({
                 description="Clear a filter or broaden the search. The register holds every statement extracted from the ingested documents; the filters only narrow what is shown."
               />
             ) : (
-              <TableFrame>
+              <TableFrame minWidth={TABLE_MIN_WIDTH}>
                 <thead>
                   <tr>
                     <Th className="w-[84px]">Ref</Th>
                     <Th className="min-w-[320px]">Statement</Th>
                     <Th className="w-[112px]">Type</Th>
+                    <Th className="w-[104px]">Binds on</Th>
                     <Th className="w-[96px]">Priority</Th>
                     <Th className="w-[128px]">Owner</Th>
                     <Th className="w-[108px]">Confidence</Th>
@@ -224,6 +236,22 @@ export default async function RequirementsPage({
                         </Td>
                         <Td>
                           <Badge>{REQUIREMENT_TYPE_LABEL[requirement.type]}</Badge>
+                        </Td>
+                        <Td>
+                          {/*
+                            On a real RFP most rows are proposal-submission
+                            mechanics binding the bidder rather than
+                            requirements on the system, and the register is
+                            where a reviewer meets them: without this the
+                            distinction lives only in the filter and the detail
+                            page.
+                          */}
+                          <Badge
+                            tone={requirement.bindsOn === "unknown" ? "medium" : "neutral"}
+                            title={BINDS_ON_LABEL[requirement.bindsOn]}
+                          >
+                            {BINDS_ON_SHORT[requirement.bindsOn]}
+                          </Badge>
                         </Td>
                         <Td>
                           <span className="text-[12px]">{PRIORITY_LABEL[requirement.priority]}</span>

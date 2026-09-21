@@ -410,10 +410,25 @@ are here so a reader knows what the register does *not* contain.
   one obligation; the a)/b)/c) items beneath it carry no modal of their own, so
   each named service is absent from the register. Attaching list items to their
   stem is a feature, not a filter change.
-- **Neither sample RFP yields a constraint.** `constraints 0` on both — they
-  state no spend cap. The capacity-versus-budget detector is therefore exercised
-  by the demo corpus and the synthetic fixture, and not by real procurement
-  text. Absence of a finding here is the documents, not the detector.
+- **The "≥ 1 constraint per RFP" criterion is UNMET on the real documents.**
+  `constraints 0` on both. An earlier ruling recorded this as "not a miss,
+  because neither document states a spend cap"; that is only half right. Neither
+  states a spend cap, but both state submission deadlines, and the spec counts
+  deadlines as constraints. Measured over the extracted register, 2 obligations
+  in Mercer Island and 4 in Santa Fe County are submission-deadline shaped —
+  *"All proposals must be submitted by 2:00PM on Friday, August 7, 2026, and
+  shall be submitted electronically utilizing Dropbox."* — and every one is
+  filed as an ordinary requirement. The cause is `looksLikeConstraint`
+  (`extract.ts`), which is money-shaped and go-live-date shaped and has no
+  submission-deadline branch. Adding one is a P2 feature; until then the
+  criterion is exercised only by the demo corpus and the synthetic fixture, and
+  this is a detector gap rather than an absence in the documents.
+- **Page boundaries are not retained.** The spec treats page boundaries as a
+  structural signal; `extractPdfText` merges the pages and returns only a
+  `pageCount`, used solely for the scanned-PDF threshold. The furniture
+  mechanism that shipped is repetition-based instead, and measures 0 furniture
+  lines inside statements on both PDFs — so nothing is known to be lost by it,
+  but the signal is absent rather than used.
 - **Roughly a fifth to a quarter of shall/must sentences are still missed** —
   75% (67/89) Mercer Island, 81% (70/86) Santa Fe County. The probe prints each
   missed sentence; most are contract boilerplate about the resulting contract

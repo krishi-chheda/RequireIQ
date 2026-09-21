@@ -96,7 +96,7 @@ export const SEVERITY_ORDER: Record<Severity, number> = {
 };
 
 export type { BindsOn };
-export { BINDS_ON_LABEL } from "./ai/engine/binds-on";
+export { BINDS_ON_LABEL, BINDS_ON_SHORT } from "./ai/engine/binds-on";
 
 export type DocumentKind =
   | "transcript"

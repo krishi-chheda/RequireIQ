@@ -582,8 +582,9 @@ function looksLikeConstraint(statement: string): boolean {
  * well as a bullet or a number. Contract boilerplate is lettered, and once the
  * heading rule stopped mistaking those clauses for section labels the marker
  * came through into the statement instead. Measured over both real RFPs, the
- * fixture and the demo corpus, it strips 7 genuine markers and nothing else -
- * no initial ("J. Smith") reaches a sentence start in any of them.
+ * fixture and the demo corpus by comparing each recorded start offset against
+ * its line start, it strips 9 genuine letter markers and nothing else - no
+ * initial ("J. Smith") reaches a sentence start in any of them.
  */
 function stripListMarker(text: string): string {
   return text.replace(/^\s*(?:[-*+]|\d+[.)]|[A-Za-z][.)])\s+/, "");

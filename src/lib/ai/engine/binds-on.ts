@@ -6,12 +6,31 @@
  *
  * This replaces the domain-noun rejection filter. That filter asked "does this
  * sentence contain a word I recognise?", which is a vocabulary list that will
- * never be complete - it rejected 132 genuine obligations from two RFPs, every
- * one for the same reason. The question here is "can I identify who this
- * binds?", and `unknown` is a designed answer that surfaces for review.
+ * never be complete - most of what the two sample RFPs yield carried no word
+ * from it, so those obligations were all rejected for that one reason. The
+ * question here is "can I identify who this binds?", and `unknown` is a
+ * designed answer that surfaces for review.
+ *
+ * The measurement, and the command that reproduces it, is in
+ * docs/analysis-engine.md section 7.
  */
 
 export type BindsOn = "system" | "supplier" | "bidder" | "buyer" | "unknown";
+
+/**
+ * One word, for the register table's row badge.
+ *
+ * A column cell has no room for the sentence form and no need for it: the
+ * column heading already supplies "Binds on". The full label stays on the badge
+ * as its title, and the detail page uses the long form.
+ */
+export const BINDS_ON_SHORT: Record<BindsOn, string> = {
+  system: "System",
+  supplier: "Supplier",
+  bidder: "Bidder",
+  buyer: "Buyer",
+  unknown: "Unknown",
+};
 
 export const BINDS_ON_LABEL: Record<BindsOn, string> = {
   system: "The system",

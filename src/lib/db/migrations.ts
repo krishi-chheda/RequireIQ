@@ -1,4 +1,9 @@
 import type { DatabaseSync } from "node:sqlite";
+// Safe to import from inside `openDb()`: binds-on.ts is a pure classifier with
+// no imports of its own, so it cannot reach back into the database layer and
+// recurse into the connection this migration is running on. Nothing else in
+// src/lib/ai is imported here for exactly that reason.
+import { classifyBindsOn } from "../ai/engine/binds-on";
 
 /**
  * Ordered schema migrations.
@@ -12,7 +17,9 @@ import type { DatabaseSync } from "node:sqlite";
  */
 export interface Migration {
   version: number;
-  sql: string;
+  sql?: string;
+  /** A data migration, for work no single DDL statement can express. */
+  run?: (db: DatabaseSync) => void;
   /** Skips the statement when it has already been applied (fresh databases). */
   skipIf?: (db: DatabaseSync) => boolean;
 }
@@ -37,6 +44,34 @@ const MIGRATIONS: Migration[] = [
     version: 3,
     sql: "ALTER TABLE requirements ADD COLUMN binds_on_evidence TEXT",
     skipIf: (db) => hasColumn(db, "requirements", "binds_on_evidence"),
+  },
+  {
+    // Migrations 2 and 3 add the columns but leave every row already in the
+    // database at the 'unknown' default with no cue: an upgraded install would
+    // read "Binds: Unidentified actor" on all of them, show no "Who this
+    // binds" panel, and export "Unidentified actor" in both CSVs - the feature
+    // dead on every database that existed before this branch. Only a re-seed
+    // fixed that, and the seed only runs when meta.seeded_at is absent.
+    //
+    // Keyed on binds_on_evidence IS NULL rather than on binds_on: that is the
+    // column this feature added as nullable, so NULL means "never classified"
+    // and cannot be confused with a row a classifier genuinely read as
+    // unknown. It is also what makes the backfill idempotent.
+    version: 4,
+    run: (db) => {
+      const rows = db
+        .prepare("SELECT id, statement FROM requirements WHERE binds_on_evidence IS NULL")
+        .all() as Array<{ id: string; statement: string }>;
+      const update = db.prepare(
+        "UPDATE requirements SET binds_on = ?, binds_on_evidence = ? WHERE id = ?",
+      );
+      for (const row of rows) {
+        const { bindsOn, evidence } = classifyBindsOn(row.statement);
+        update.run(bindsOn, evidence, row.id);
+      }
+    },
+    // No skipIf: migration 3 guarantees the column exists by the time this
+    // runs, and on a fresh database the table is empty, so the loop is a no-op.
   },
 ];
 
@@ -67,11 +102,19 @@ export function runMigrations(db: DatabaseSync, migrations: Migration[] = MIGRAT
   // skipped by its own `skipIf` predicate rather than by matching an error
   // string, so every error that does reach here rolls the whole thing back:
   // nothing can stamp schema_version over a half-applied migration.
-  db.exec("BEGIN");
+  //
+  // BEGIN IMMEDIATE, not a deferred BEGIN: two processes opening the same
+  // pre-migration database at once (a seed script beside a dev server, two
+  // `next start` workers) would each take a read lock on their first
+  // statement, and the ALTER that follows is a read-to-write upgrade, which
+  // SQLite refuses with SQLITE_BUSY immediately rather than waiting out
+  // busy_timeout. The throw would escape `openDb()` as an unhandled 500.
+  db.exec("BEGIN IMMEDIATE");
   try {
     for (const migration of pending) {
       if (migration.skipIf?.(db)) continue;
-      db.exec(migration.sql);
+      if (migration.sql) db.exec(migration.sql);
+      migration.run?.(db);
     }
 
     db.prepare(

@@ -106,8 +106,10 @@ describe("migrations", () => {
       .prepare("SELECT statement, binds_on, binds_on_evidence FROM requirements WHERE id = 'r1'")
       .get() as { statement: string; binds_on: string; binds_on_evidence: string | null };
     expect(row.statement).toBe("The system must log in.");
-    expect(row.binds_on).toBe("unknown");
-    expect(row.binds_on_evidence).toBeNull();
+    // Not 'unknown': the columns arrive with a DEFAULT, and a row that predates
+    // them has to be classified, not left reading "Unidentified actor".
+    expect(row.binds_on).toBe("system");
+    expect(row.binds_on_evidence).toContain("system");
     const stamp = () =>
       (db.prepare("SELECT value FROM meta WHERE key = 'schema_version'").get() as { value: string }).value;
     expect(stamp()).toBe(String(LATEST_SCHEMA_VERSION));
@@ -115,6 +117,61 @@ describe("migrations", () => {
     // Re-running is a no-op rather than a duplicate-column error.
     expect(() => runMigrations(db)).not.toThrow();
     expect(stamp()).toBe(String(LATEST_SCHEMA_VERSION));
+    db.close();
+  });
+
+  it("classifies the rows a pre-branch database already holds", async () => {
+    // The upgrade path a real install takes: rows written by a build that had
+    // no binds_on at all. Without a backfill every one of them reads
+    // "Unidentified actor" in the register, the filter and both CSV exports,
+    // and no amount of restarting fixes it - the seed only runs when
+    // meta.seeded_at is absent, and it is not.
+    const { SCHEMA_SQL } = await import("./schema");
+    const { runMigrations } = await import("./migrations");
+
+    const old = SCHEMA_SQL.split(/\r?\n/)
+      .filter((line) => !/^\s*binds_on(_evidence)?\s/.test(line))
+      .join("\n");
+
+    const db = new DatabaseSync(join(dir, "pre-branch.db"));
+    db.exec(old);
+    db.exec(
+      `INSERT INTO projects (id, key, name, client, description, phase, baseline_date, created_at)
+       VALUES ('p2', 'P2', 'Legacy', 'Client', 'd', 'discovery', '2026-01-01', '2026-01-01')`,
+    );
+    const rows: Array<[string, string, string]> = [
+      ["a", "The Contractor shall submit evidence of insurance as is required herein.", "supplier"],
+      ["b", "Proposals shall be submitted by 2:00PM on Friday 7 August.", "bidder"],
+      ["c", "The City will provide test data within ten working days of contract award.", "buyer"],
+      ["d", "The platform must achieve 99.99% availability measured monthly.", "system"],
+      ["e", "It shall be completed in a timely manner.", "unknown"],
+    ];
+    const insert = db.prepare(
+      `INSERT INTO requirements (id, project_id, ref, statement, original_statement, type, priority, status,
+         provenance, confidence, rationale, classification_evidence, created_at, updated_at)
+       VALUES (?, 'p2', ?, ?, ?, 'functional', 'must', 'proposed', 'ai_analysis', 0.8, 'why', 'cues',
+         '2026-01-01', '2026-01-01')`,
+    );
+    for (const [id, statement] of rows) insert.run(id, `REQ-${id}`, statement, statement);
+
+    runMigrations(db);
+
+    const read = db.prepare("SELECT binds_on, binds_on_evidence FROM requirements WHERE id = ?");
+    for (const [id, , expected] of rows) {
+      const row = read.get(id) as { binds_on: string; binds_on_evidence: string | null };
+      expect([id, row.binds_on]).toEqual([id, expected]);
+      // Every row gets a cue, including the honest unknown - a NULL here is
+      // what the backfill keys on, so leaving one behind would re-run forever.
+      expect(row.binds_on_evidence).toBeTruthy();
+    }
+
+    // A reviewer's own answer is not overwritten by a later re-run.
+    db.prepare("UPDATE requirements SET binds_on = 'buyer' WHERE id = 'd'").run();
+    runMigrations(db);
+    expect(
+      (db.prepare("SELECT binds_on FROM requirements WHERE id = 'd'").get() as { binds_on: string })
+        .binds_on,
+    ).toBe("buyer");
     db.close();
   });
 });

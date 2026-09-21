@@ -258,7 +258,9 @@ how to re-fetch them. On those two, at the commit this was written:
 Those are the honest figures, not rounded ones: roughly a quarter of the
 Mercer Island shall/must sentences are still missed, and the probe prints each
 of them so the next improvement is chosen from evidence. Constraints are 0 on
-both because neither document states a spend cap.
+both, and that is a detector gap rather than an absence: neither document states
+a spend cap, but both state submission deadlines, which the constraint detector
+has no branch for. See *Known limitations* below.
 
 ---
 
@@ -539,40 +541,53 @@ This is the deployment target the architecture actually suits.
    one obligation; the a)/b)/c) items beneath it carry no modal of their own,
    so each service is absent from the register. Attaching list items to their
    stem is a feature, not a filter change.
-4. **No spend cap was found in either sample RFP** — constraints extracted: 0
-   from both. That is the documents, not the detector: neither states a budget
-   ceiling, so the capacity-versus-budget criterion is exercised by the demo
-   corpus and the synthetic fixture only.
-5. **`obligationCoverage` counts downstream of chunking.** Its denominator comes
+4. **The "≥ 1 constraint per RFP" criterion is unmet on the real documents** —
+   constraints extracted: 0 from both. Neither states a spend cap, but both
+   state submission deadlines, and the spec counts a deadline as a constraint:
+   2 deadline-shaped obligations in Mercer Island and 4 in Santa Fe County
+   (*"All proposals must be submitted by 2:00PM on Friday, August 7, 2026 ..."*)
+   are filed as ordinary requirements. So this is a detector gap, not an
+   absence in the documents — `looksLikeConstraint` in
+   `src/lib/ai/engine/extract.ts` is money-shaped and go-live-date shaped and
+   has no submission-deadline branch. Until one is added (P2), the
+   capacity-versus-budget criterion is exercised by the demo corpus and the
+   synthetic fixture only.
+5. **Page boundaries are not retained as a structural signal**, though the spec
+   calls for it: `extractPdfText` merges the pages and returns only a
+   `pageCount`, used for the scanned-PDF threshold. Page furniture is removed by
+   repetition instead, which measures 0 furniture lines inside statements on
+   both sample RFPs — so nothing is known to be lost, but the signal is absent
+   rather than used.
+6. **`obligationCoverage` counts downstream of chunking.** Its denominator comes
    from the same sentence stream extraction reads, so a sentence wrongly
    swallowed into a heading disappears from *both* sides of the ratio and
    scores as perfect coverage. The heading rules forbid the case that would
    cause it, and the blind spot is documented in the code rather than closed.
-6. **`acceptance_criteria` is not refreshed on edit once a reviewer has typed
+7. **`acceptance_criteria` is not refreshed on edit once a reviewer has typed
    one.** Every other derived field is re-derived from the new wording; that row
    has no per-field provenance column, so a value that is not a verbatim copy of
    the old statement is assumed to be human and left alone.
-7. **DOCX is not parsed.** PDF is; the pipeline is format-agnostic downstream —
+8. **DOCX is not parsed.** PDF is; the pipeline is format-agnostic downstream —
    it takes a string — so DOCX is a single branch in `extractText()`
    (`src/lib/ingest.ts`) using `mammoth`. Uploading one returns a clear 415
    rather than analysing binary noise into plausible requirements.
-8. **Similarity is lexical, not semantic.** TF-IDF matches vocabulary, not
+9. **Similarity is lexical, not semantic.** TF-IDF matches vocabulary, not
    meaning: two requirements saying the same thing in different words score low.
    Chosen because the terms that produced a score can be shown to the reviewer.
    The conflict detectors compensate by combining it with quantity and polarity
    analysis rather than relying on it alone.
-9. **The sizing heuristic is generic.** `SIZING_MODEL` in
+10. **The sizing heuristic is generic.** `SIZING_MODEL` in
    `src/lib/ai/engine/conflict.ts` uses order-of-magnitude private-cloud unit
    costs. It is exported, shown with every input, and labelled a heuristic — but
    a real engagement should replace the constants with its own tenancy pricing.
-10. **English only**, and tuned for the register conventions of
+11. **English only**, and tuned for the register conventions of
    ISO/IEC/IEEE 29148 (`must`/`shall` binding, `should` advisory).
-11. **Single-node SQLite.** Fine for one consultancy's engagements on a host with
+12. **Single-node SQLite.** Fine for one consultancy's engagements on a host with
    a writable disk; a multi-tenant deployment, or a serverless one with durable
    writes, needs Postgres. See *Deployment* above.
-12. **Conflict detection is O(n²)** over the register. Comfortable to a few
+13. **Conflict detection is O(n²)** over the register. Comfortable to a few
    thousand requirements; beyond that it needs an inverted-index candidate filter.
-13. **The classifier occasionally mislabels business requirements as functional**
+14. **The classifier occasionally mislabels business requirements as functional**
    when they lack commercial vocabulary. It shows its matched terms, so a
    reviewer can see and correct it.
 
@@ -580,23 +595,23 @@ This is the deployment target the architecture actually suits.
 
 If this became a real enterprise product, in order:
 
-1. **Authentication, RBAC and multi-tenancy** — SSO, project membership, per-role
+15. **Authentication, RBAC and multi-tenancy** — SSO, project membership, per-role
    permissions. Nothing else ships without this.
-2. **Learned conflict detection on top of the rule layer** — keep the
+16. **Learned conflict detection on top of the rule layer** — keep the
    deterministic detectors as the auditable floor, add an embedding model to
    catch the semantic conflicts TF-IDF misses, and surface both with the same
    provenance labelling.
-3. **DOCX and connector ingestion** — SharePoint, Confluence, Teams
+17. **DOCX and connector ingestion** — SharePoint, Confluence, Teams
    recordings, Outlook. PDF already lands through the same seam.
-4. **Bidirectional JIRA and Azure DevOps sync** — push approved requirements as
+18. **Bidirectional JIRA and Azure DevOps sync** — push approved requirements as
    epics, pull implementation status back to close the traceability loop from
    requirement to shipped code.
-5. **Baseline versioning and diff** — snapshot the register at each gate, diff
+19. **Baseline versioning and diff** — snapshot the register at each gate, diff
    between gates, generate the change-control pack automatically.
-6. **Cross-engagement learning** — which conflict types actually cost money,
+20. **Cross-engagement learning** — which conflict types actually cost money,
    measured across a consultancy's portfolio, to weight detector severity by
    evidence rather than by judgement.
-7. **Real-time collaboration** on the review queue, with comment threads against
+21. **Real-time collaboration** on the review queue, with comment threads against
    requirements and conflicts.
 
 ---

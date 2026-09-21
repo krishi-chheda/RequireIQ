@@ -20,7 +20,8 @@ describe("classifyBindsOn", () => {
   it("returns unknown rather than guessing when no actor is identifiable", () => {
     // Honest outcome, not a fallback: this surfaces for review instead of
     // silently discarding a real obligation, which is what the old
-    // domain-noun filter did to 132 of them.
+    // domain-noun filter did to most of what the two sample RFPs yield
+    // (measured in docs/analysis-engine.md section 7).
     const result = classifyBindsOn("It shall be completed in a timely manner.");
     expect(result.bindsOn).toBe("unknown");
   });
@@ -40,8 +41,9 @@ describe("classifyBindsOn", () => {
   it("does not read governing-law boilerplate as binding the buyer", () => {
     // "the State of New Mexico" is jurisdiction boilerplate, not an obligation
     // on a government buyer named "the State". Measured against two real RFPs:
-    // 4 of 6 sentences containing "the state" were this pattern, none were a
-    // genuine buyer obligation.
+    // of the 7 obligation-shaped sentences containing "the state" (extracted,
+    // constraint or rejected), every one was jurisdiction or governing-law
+    // boilerplate and none was a genuine buyer obligation.
     const result = classifyBindsOn(
       "This Agreement shall be governed by the laws of the State of New Mexico."
     );
