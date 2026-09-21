@@ -150,8 +150,8 @@ export function seedDatabase(): void {
     const insertRequirement = db.prepare(
       `INSERT INTO requirements (id, project_id, ref, statement, original_statement, type, priority, status,
         provenance, confidence, rationale, classification_evidence, owner_stakeholder_id, acceptance_criteria,
-        post_baseline, quality_score, binds_on, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        post_baseline, quality_score, binds_on, binds_on_evidence, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     const insertConstraint = db.prepare(
       `INSERT INTO constraints_tbl (id, project_id, ref, statement, category, value, unit, owner_stakeholder_id, provenance, created_at)
@@ -232,6 +232,7 @@ export function seedDatabase(): void {
           postBaseline ? 1 : 0,
           qualityScore(findings),
           extracted.bindsOn,
+          extracted.bindsOnEvidence,
           tick(),
           tick(),
         );

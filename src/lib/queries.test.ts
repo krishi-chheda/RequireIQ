@@ -14,6 +14,7 @@ import { join } from "node:path";
 
 let queries: typeof import("./queries");
 let actions: typeof import("./actions");
+let reports: typeof import("./reports");
 let dir: string;
 let projectId: string;
 
@@ -22,6 +23,7 @@ beforeAll(async () => {
   process.env.REQUIREIQ_DB_PATH = join(dir, "test.db");
   queries = await import("./queries");
   actions = await import("./actions");
+  reports = await import("./reports");
   const projects = queries.listProjects();
   projectId = projects[0]!.id;
 });
@@ -300,5 +302,18 @@ describe("assistant grounding", () => {
     expect(answer.grounded).toBe(true);
     expect(answer.answer).toContain(capacity.ref);
     expect(answer.citations.some((c) => c.ref === capacity.ref)).toBe(true);
+  });
+});
+
+describe("bindsOn filtering", () => {
+  it("filters the register by who the obligation binds", () => {
+    const system = queries.listRequirements(projectId, { bindsOn: "system" });
+    expect(system.length).toBeGreaterThan(0);
+    expect(system.every((r) => r.bindsOn === "system")).toBe(true);
+  });
+
+  it("exports bindsOn in the register report, so a client can see the split", () => {
+    const csv = reports.buildReport(projectId, "register")!.csv;
+    expect(csv).toContain("Binds on");
   });
 });

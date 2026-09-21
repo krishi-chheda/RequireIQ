@@ -29,6 +29,15 @@ const MIGRATIONS: Migration[] = [
     sql: "ALTER TABLE requirements ADD COLUMN binds_on TEXT NOT NULL DEFAULT 'unknown'",
     skipIf: (db) => hasColumn(db, "requirements", "binds_on"),
   },
+  {
+    // The cue behind the binds_on value. Stored rather than recomputed at read
+    // time: a recomputed string could disagree with the stored classification
+    // and explain a badge the row does not carry. Nullable, because rows
+    // written before this migration have no cue to record.
+    version: 3,
+    sql: "ALTER TABLE requirements ADD COLUMN binds_on_evidence TEXT",
+    skipIf: (db) => hasColumn(db, "requirements", "binds_on_evidence"),
+  },
 ];
 
 export const LATEST_SCHEMA_VERSION = MIGRATIONS.reduce(

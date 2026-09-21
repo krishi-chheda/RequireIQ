@@ -12,9 +12,11 @@ import {
 } from "@/lib/queries";
 import { z } from "@/lib/validate";
 import {
+  BINDS_ON_LABEL,
   PRIORITY_LABEL,
   REQUIREMENT_TYPES,
   REQUIREMENT_TYPE_LABEL,
+  type BindsOn,
   type Priority,
   type RequirementType,
   type ReviewStatus,
@@ -41,6 +43,7 @@ export const metadata: Metadata = { title: "Requirements register" };
 const VIEWS = ["findings", "unowned", "no-acceptance", "post-baseline", "constraints"] as const;
 const STATUSES: ReviewStatus[] = ["proposed", "in_review", "needs_clarification", "approved", "rejected"];
 const PRIORITIES: Priority[] = ["must", "should", "could", "wont"];
+const BINDS_ON: BindsOn[] = ["system", "supplier", "bidder", "buyer", "unknown"];
 
 export default async function RequirementsPage({
   params,
@@ -58,12 +61,14 @@ export default async function RequirementsPage({
   const type = z.optionalOneOf(query.type, REQUIREMENT_TYPES) as RequirementType | undefined;
   const status = z.optionalOneOf(query.status, STATUSES) as ReviewStatus | undefined;
   const priority = z.optionalOneOf(query.priority, PRIORITIES) as Priority | undefined;
+  const bindsOn = z.optionalOneOf(query.bindsOn, BINDS_ON) as BindsOn | undefined;
   const search = z.search(query.q);
 
   const filters: RequirementFilters = {
     type,
     status,
     priority,
+    bindsOn,
     search,
     hasFindings: view === "findings" || undefined,
     unowned: view === "unowned" || undefined,
@@ -102,6 +107,17 @@ export default async function RequirementsPage({
         value: t,
         label: REQUIREMENT_TYPE_LABEL[t],
         count: typeCounts.get(t),
+      })),
+    },
+    {
+      // Deliberately not defaulted to "system": nearly every demo-corpus row
+      // binds the system, so a silent default would hide records for nothing.
+      param: "bindsOn",
+      label: "Binds on",
+      options: BINDS_ON.filter((value) => all.some((r) => r.bindsOn === value)).map((value) => ({
+        value,
+        label: BINDS_ON_LABEL[value],
+        count: all.filter((r) => r.bindsOn === value).length,
       })),
     },
     {

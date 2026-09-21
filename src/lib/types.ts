@@ -196,6 +196,8 @@ export interface Requirement {
   qualityScore: number;
   /** Who the obligation binds. Orthogonal to `type`. */
   bindsOn: BindsOn;
+  /** The cue that produced `bindsOn`. Empty when the row predates the column. */
+  bindsOnEvidence: string;
   createdAt: string;
   updatedAt: string;
 }

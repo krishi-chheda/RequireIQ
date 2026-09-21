@@ -147,6 +147,10 @@ describe("stored bindsOn", () => {
       expect(row!.bindsOn).toBe(classifyBindsOn(row!.statement).bindsOn);
       expect(row!.bindsOn).not.toBe("unknown");
       expect(row!.bindsOn).toBe("supplier");
+      // `binds_on_evidence` is nullable, so dropping it from the INSERT would
+      // read back as an empty string and the badge would stand unexplained.
+      expect(row!.bindsOnEvidence).toBe(classifyBindsOn(row!.statement).evidence);
+      expect(row!.bindsOnEvidence).toContain("contractor");
     } finally {
       closeDb();
       rmSync(dir, { recursive: true, force: true });

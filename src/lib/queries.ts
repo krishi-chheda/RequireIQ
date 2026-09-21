@@ -109,6 +109,7 @@ function mapRequirement(row: Row): Requirement {
     postBaseline: bool(row.post_baseline),
     qualityScore: num(row.quality_score),
     bindsOn: str(row.binds_on) as BindsOn,
+    bindsOnEvidence: str(row.binds_on_evidence),
     createdAt: str(row.created_at),
     updatedAt: str(row.updated_at),
   };
@@ -478,6 +479,8 @@ export interface RequirementFilters {
   hasFindings?: boolean;
   /** Only requirements with no named owner. */
   unowned?: boolean;
+  /** Only obligations binding this actor. */
+  bindsOn?: BindsOn;
 }
 
 export function listRequirements(projectId: string, filters: RequirementFilters = {}): Requirement[] {
@@ -495,6 +498,10 @@ export function listRequirements(projectId: string, filters: RequirementFilters 
   if (filters.priority) {
     clauses.push("r.priority = ?");
     params.push(filters.priority);
+  }
+  if (filters.bindsOn) {
+    clauses.push("r.binds_on = ?");
+    params.push(filters.bindsOn);
   }
   if (filters.postBaseline) clauses.push("r.post_baseline = 1");
   if (filters.unowned) clauses.push("r.owner_stakeholder_id IS NULL");

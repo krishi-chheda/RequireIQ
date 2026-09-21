@@ -74,6 +74,7 @@ CREATE TABLE IF NOT EXISTS requirements (
   post_baseline           INTEGER NOT NULL DEFAULT 0,
   quality_score           REAL NOT NULL DEFAULT 0,
   binds_on                TEXT NOT NULL DEFAULT 'unknown',
+  binds_on_evidence       TEXT,
   created_at              TEXT NOT NULL,
   updated_at              TEXT NOT NULL,
   UNIQUE (project_id, ref)

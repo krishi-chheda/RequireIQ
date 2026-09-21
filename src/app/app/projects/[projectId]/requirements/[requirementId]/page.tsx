@@ -14,6 +14,7 @@ import {
 } from "@/lib/queries";
 import {
   AMBIGUITY_KIND_LABEL,
+  BINDS_ON_LABEL,
   PRIORITY_LABEL,
   RELATIONSHIP_LABEL,
   REQUIREMENT_TYPE_LABEL,
@@ -88,6 +89,7 @@ export default async function RequirementDetailPage({
             <StatusBadge status={requirement.status} />
             <ProvenanceTag provenance={requirement.provenance} />
             <Badge>{REQUIREMENT_TYPE_LABEL[requirement.type]}</Badge>
+            <Badge>Binds: {BINDS_ON_LABEL[requirement.bindsOn]}</Badge>
             <Badge>{PRIORITY_LABEL[requirement.priority]}</Badge>
             {requirement.postBaseline ? <Badge tone="medium">Added after baseline</Badge> : null}
             {edited ? <Badge tone="brand">Edited by a reviewer</Badge> : null}
@@ -165,6 +167,16 @@ export default async function RequirementDetailPage({
                     {requirement.classificationEvidence}
                   </dd>
                 </div>
+                {requirement.bindsOnEvidence ? (
+                  <div className="px-5 py-3">
+                    <dt className="text-[11px] font-semibold uppercase tracking-[0.1em] text-ink-faint">
+                      Who this binds
+                    </dt>
+                    <dd className="mt-1.5 text-[12.5px] leading-relaxed text-ink-muted">
+                      {requirement.bindsOnEvidence}
+                    </dd>
+                  </div>
+                ) : null}
                 <div className="px-5 py-3">
                   <dt className="text-[11px] font-semibold uppercase tracking-[0.1em] text-ink-faint">
                     Acceptance criteria

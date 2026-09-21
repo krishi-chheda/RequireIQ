@@ -19,6 +19,7 @@ import {
 } from "./queries";
 import {
   AMBIGUITY_KIND_LABEL,
+  BINDS_ON_LABEL,
   CONFLICT_KIND_LABEL,
   PRIORITY_LABEL,
   REQUIREMENT_TYPE_LABEL,
@@ -131,6 +132,7 @@ export function buildReport(projectId: string, reportId: ReportId): ReportPayloa
           ref: requirement.ref,
           statement: requirement.statement,
           type: REQUIREMENT_TYPE_LABEL[requirement.type],
+          bindsOn: BINDS_ON_LABEL[requirement.bindsOn],
           priority: PRIORITY_LABEL[requirement.priority],
           status: REVIEW_STATUS_LABEL[requirement.status],
           provenance: requirement.provenance,
@@ -150,13 +152,13 @@ export function buildReport(projectId: string, reportId: ReportId): ReportPayloa
         filename: slug,
         csv: toCsv(
           [
-            "Reference", "Requirement", "Type", "Priority", "Review status", "Provenance",
+            "Reference", "Requirement", "Type", "Binds on", "Priority", "Review status", "Provenance",
             "Extraction confidence", "Business owner", "Owner team", "Acceptance criteria",
             "Added after baseline", "Source document", "Source location", "Source quote",
             "Extraction rationale",
           ],
           rows.map((r) => [
-            r.ref, r.statement, r.type, r.priority, r.status, r.provenance, r.confidence,
+            r.ref, r.statement, r.type, r.bindsOn, r.priority, r.status, r.provenance, r.confidence,
             r.owner, r.ownerTeam, r.acceptanceCriteria, r.postBaseline, r.sourceDocument,
             r.sourceLocation, r.sourceQuote, r.rationale,
           ]),
@@ -248,6 +250,7 @@ export function buildReport(projectId: string, reportId: ReportId): ReportPayloa
           ref: row.requirement.ref,
           statement: row.requirement.statement,
           type: REQUIREMENT_TYPE_LABEL[row.requirement.type],
+          bindsOn: BINDS_ON_LABEL[row.requirement.bindsOn],
           sourceQuote: evidence?.quote ?? "",
           document: evidence?.documentTitle ?? "",
           location: evidence?.locator ?? "",
@@ -266,12 +269,12 @@ export function buildReport(projectId: string, reportId: ReportId): ReportPayloa
         filename: slug,
         csv: toCsv(
           [
-            "Reference", "Requirement", "Type", "Source sentence", "Document", "Location",
+            "Reference", "Requirement", "Type", "Binds on", "Source sentence", "Document", "Location",
             "Character offsets", "Captured", "Requested by", "Team", "Conflicts",
             "Open quality findings", "Related records", "Review status",
           ],
           rows.map((r) => [
-            r.ref, r.statement, r.type, r.sourceQuote, r.document, r.location, r.offsets,
+            r.ref, r.statement, r.type, r.bindsOn, r.sourceQuote, r.document, r.location, r.offsets,
             r.capturedAt, r.requestedBy, r.team, r.conflicts, r.openFindings, r.relatedRecords, r.status,
           ]),
         ),
