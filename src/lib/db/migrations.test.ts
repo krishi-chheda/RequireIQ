@@ -33,4 +33,29 @@ describe("migrations", () => {
     const system = queries.listRequirements(projectId).filter((r) => r.bindsOn === "system");
     expect(system.length).toBeGreaterThan(10);
   });
+
+  it("rolls back and leaves schema_version alone when a migration fails", async () => {
+    const { openDb } = await import("./connection");
+    const { runMigrations } = await import("./migrations");
+    const db = openDb();
+    const before = db
+      .prepare("SELECT value FROM meta WHERE key = 'schema_version'")
+      .get() as { value: string };
+
+    expect(() =>
+      runMigrations(db, [
+        { version: 998, sql: "CREATE TABLE migration_probe (id TEXT)" },
+        { version: 999, sql: "THIS IS NOT SQL" },
+      ]),
+    ).toThrow();
+
+    const after = db.prepare("SELECT value FROM meta WHERE key = 'schema_version'").get() as {
+      value: string;
+    };
+    expect(after.value).toBe(before.value);
+    // The earlier statement in the same run is gone too, not just the stamp.
+    expect(
+      db.prepare("SELECT name FROM sqlite_master WHERE name = 'migration_probe'").get(),
+    ).toBeUndefined();
+  });
 });

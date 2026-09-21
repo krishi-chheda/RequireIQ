@@ -92,7 +92,9 @@ export function transaction<T>(fn: (db: DatabaseSync) => T): T {
     db.exec("COMMIT");
     return result;
   } catch (error) {
-    db.exec("ROLLBACK");
+    // SQLite auto-rolls-back on some failures (disk full, I/O error, interrupt).
+    // Rolling back again would throw over the top of the real cause.
+    if (db.isTransaction) db.exec("ROLLBACK");
     throw error;
   }
 }

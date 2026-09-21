@@ -109,12 +109,14 @@ const DOMAIN_NOUNS = [
  * matching is more correct but is not free - it drops RFP yield (144 vs 146
  * over the two sample PDFs) because several entries rely on a mid-word hit
  * for an inflection substring matching also happens to allow. So only these
- * two get the stricter, word-boundary-at-start check; everything else keeps
- * plain substring matching, unchanged.
+ * two get the stricter, whole-word check (singular or plural: "bid", "bids",
+ * "firm", "firms"); everything else keeps plain substring matching, unchanged.
+ * Longer entries such as "bidder" are separate DOMAIN_NOUNS entries and still
+ * match by substring.
  */
 const AMBIGUOUS_DOMAIN_NOUNS = new Set(["bid", "firm"]);
 const AMBIGUOUS_DOMAIN_NOUN_RE = new RegExp(
-  `\\b(?:${[...AMBIGUOUS_DOMAIN_NOUNS].join("|")})`,
+  `\\b(?:${[...AMBIGUOUS_DOMAIN_NOUNS].map((noun) => `${noun}s?`).join("|")})\\b`,
   "i",
 );
 
