@@ -1,0 +1,21 @@
+{
+  "/_not-found/page": "app/_not-found/page.js",
+  "/api/projects/[projectId]/assistant/route": "app/api/projects/[projectId]/assistant/route.js",
+  "/api/projects/[projectId]/ingest/route": "app/api/projects/[projectId]/ingest/route.js",
+  "/api/projects/[projectId]/export/[report]/route": "app/api/projects/[projectId]/export/[report]/route.js",
+  "/page": "app/page.js",
+  "/app/page": "app/app/page.js",
+  "/app/projects/[projectId]/conflicts/[conflictId]/page": "app/app/projects/[projectId]/conflicts/[conflictId]/page.js",
+  "/app/projects/[projectId]/documents/[documentId]/page": "app/app/projects/[projectId]/documents/[documentId]/page.js",
+  "/app/projects/[projectId]/assistant/page": "app/app/projects/[projectId]/assistant/page.js",
+  "/app/projects/[projectId]/requirements/[requirementId]/page": "app/app/projects/[projectId]/requirements/[requirementId]/page.js",
+  "/app/projects/[projectId]/documents/page": "app/app/projects/[projectId]/documents/page.js",
+  "/app/projects/[projectId]/exports/page": "app/app/projects/[projectId]/exports/page.js",
+  "/app/projects/[projectId]/traceability/page": "app/app/projects/[projectId]/traceability/page.js",
+  "/app/projects/[projectId]/page": "app/app/projects/[projectId]/page.js",
+  "/app/projects/[projectId]/conflicts/page": "app/app/projects/[projectId]/conflicts/page.js",
+  "/app/projects/[projectId]/graph/page": "app/app/projects/[projectId]/graph/page.js",
+  "/app/projects/[projectId]/risks/page": "app/app/projects/[projectId]/risks/page.js",
+  "/app/projects/[projectId]/scope/page": "app/app/projects/[projectId]/scope/page.js",
+  "/app/projects/[projectId]/requirements/page": "app/app/projects/[projectId]/requirements/page.js"
+}

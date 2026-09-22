@@ -6,16 +6,36 @@ import {
   listConflicts,
   listProjectAmbiguities,
   listProjects,
+  listCoverageGaps,
   listRequirements,
   listRisks,
 } from "@/lib/queries";
-import { BINDS_ON_LABEL, REQUIREMENT_TYPE_LABEL, type RequirementType } from "@/lib/types";
-import { Badge, Eyebrow, LinkButton, Meter, buttonClass, formatNumber } from "@/components/ui";
+import { COVERAGE_AREA_COUNT } from "@/lib/ai/engine/coverage";
 import {
+  BINDS_ON_LABEL,
+  CONFLICT_KIND_LABEL,
+  REQUIREMENT_TYPE_LABEL,
+  type Provenance,
+  type RequirementType,
+} from "@/lib/types";
+import {
+  Badge,
+  Eyebrow,
+  LinkButton,
+  Meter,
+  ProvenanceTag,
+  buttonClass,
+  formatNumber,
+} from "@/components/ui";
+import {
+  AnnotatedStatement,
   BarRows,
   ConflictTimeline,
+  CoverageGrid,
+  EngineSplit,
   PipelineFlow,
   SeverityRows,
+  TraceChain,
   type BarDatum,
   type FlowStage,
 } from "@/components/landing-visuals";

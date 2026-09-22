@@ -1,0 +1,21 @@
+{
+  "/_not-found/page": "/_not-found",
+  "/api/projects/[projectId]/assistant/route": "/api/projects/[projectId]/assistant",
+  "/api/projects/[projectId]/ingest/route": "/api/projects/[projectId]/ingest",
+  "/api/projects/[projectId]/export/[report]/route": "/api/projects/[projectId]/export/[report]",
+  "/page": "/",
+  "/app/page": "/app",
+  "/app/projects/[projectId]/conflicts/[conflictId]/page": "/app/projects/[projectId]/conflicts/[conflictId]",
+  "/app/projects/[projectId]/documents/[documentId]/page": "/app/projects/[projectId]/documents/[documentId]",
+  "/app/projects/[projectId]/assistant/page": "/app/projects/[projectId]/assistant",
+  "/app/projects/[projectId]/requirements/[requirementId]/page": "/app/projects/[projectId]/requirements/[requirementId]",
+  "/app/projects/[projectId]/documents/page": "/app/projects/[projectId]/documents",
+  "/app/projects/[projectId]/exports/page": "/app/projects/[projectId]/exports",
+  "/app/projects/[projectId]/traceability/page": "/app/projects/[projectId]/traceability",
+  "/app/projects/[projectId]/page": "/app/projects/[projectId]",
+  "/app/projects/[projectId]/conflicts/page": "/app/projects/[projectId]/conflicts",
+  "/app/projects/[projectId]/graph/page": "/app/projects/[projectId]/graph",
+  "/app/projects/[projectId]/risks/page": "/app/projects/[projectId]/risks",
+  "/app/projects/[projectId]/scope/page": "/app/projects/[projectId]/scope",
+  "/app/projects/[projectId]/requirements/page": "/app/projects/[projectId]/requirements"
+}

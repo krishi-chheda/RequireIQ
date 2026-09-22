@@ -315,7 +315,10 @@ export function AnnotatedStatement({
       </div>
       <p className="mt-2.5 text-[12.5px] leading-relaxed text-ink-muted">
         {before}
-        <mark className="rounded-xs bg-medium-soft px-1 font-medium text-medium">{span}</mark>
+        {/* No horizontal padding: the highlight has to hug the span exactly,
+            or the punctuation that follows it is pushed off and the sentence
+            renders as "immediately ." */}
+        <mark className="rounded-xs bg-medium-soft font-medium text-medium">{span}</mark>
         {after}
       </p>
       <p className="mt-3 border-t border-line pt-3 text-[11.5px] leading-relaxed text-ink-faint">{note}</p>
