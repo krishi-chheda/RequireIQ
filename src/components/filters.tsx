@@ -131,7 +131,10 @@ export function RegisterFilters({
       })}
 
       <div className="flex items-center justify-between gap-2 border-t border-line pt-3">
-        <p data-numeric className="text-[11.5px] text-ink-faint">
+        {/* Announced, because pressing a filter chip changes nothing else a
+            screen reader would notice - the table below simply has fewer rows.
+            This line is the only feedback that the press did anything. */}
+        <p data-numeric aria-live="polite" className="text-[11.5px] text-ink-faint">
           {shown === total ? `${total} requirements` : `${shown} of ${total}`}
         </p>
         {activeCount > 0 ? (

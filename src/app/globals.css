@@ -58,6 +58,43 @@
   --color-prov-ai: #6f93f5;
   --color-prov-suggest: #a98bf0;
   --color-prov-human: #35b87d;
+  /* Tint behind a proposal, so a suggestion reads as a suggestion at a glance
+     without borrowing the severity ramp. 6.74:1 for prov-suggest text on it. */
+  --color-prov-suggest-soft: #170f26;
+
+  /* Requirement class, for the relationship graph.
+
+     A categorical palette, deliberately separate from the severity ramp and
+     the provenance colours even where a value coincides: a class is not a
+     severity, and recolouring "security" must not silently recolour a critical
+     finding. Every one of these clears 3:1 against `surface` (WCAG 1.4.11)
+     except where noted on the relationship colours below. */
+  --color-class-functional: #6f93f5;
+  --color-class-non-functional: #8b95a6;
+  --color-class-performance: #f08c3a;
+  --color-class-security: #f2555a;
+  --color-class-compliance: #a98bf0;
+  --color-class-operational: #35b87d;
+  --color-class-technical: #4bb3c9;
+  --color-class-business: #d9b02c;
+  --color-class-ux: #e07ab8;
+  --color-class-budget: #d9b02c;
+  --color-class-timeline: #f08c3a;
+  --color-class-regulatory: #a98bf0;
+  --color-class-organisational: #8b95a6;
+  --color-class-unknown: #8b95a6;
+
+  /* Relationship kind, for graph edges. `contradicts` uses the severity ramp
+     because it is the only edge that represents a problem.
+
+     `supports` is 1.85:1 against `surface` on purpose - it is the most common
+     edge by far, and drawing it at full strength turns the picture into noise.
+     The graph is `aria-hidden` and every edge is also a row in the
+     relationship table, so nothing depends on reading this line. */
+  --color-rel-duplicates: #a98bf0;
+  --color-rel-depends: #6f93f5;
+  --color-rel-supports: #3a414d;
+  --color-rel-impacts: #8b95a6;
 
   --font-sans: ui-sans-serif, system-ui, "Segoe UI Variable Text", "Segoe UI",
     -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
@@ -160,6 +197,21 @@
     transition: transform 120ms ease;
   }
   .skip-link:focus { transform: translateY(0); }
+
+  /* Register tables scroll horizontally below their min-width rather than
+     reflowing to cards - the reader is comparing rows, and a card stack
+     destroys the comparison. Pinning the first column keeps the reference
+     that identifies each row on screen while the rest of it scrolls past.
+
+     Every table in the product sits inside a Card, so the pinned cell's
+     background is always `surface`; without an opaque background the
+     scrolled-under content shows through. */
+  .table-sticky-first thead th:first-child,
+  .table-sticky-first tbody td:first-child {
+    position: sticky;
+    left: 0;
+    background-color: var(--color-surface);
+  }
 
   /* Subtle entrance for route content. Disabled under reduced motion below. */
   .enter {

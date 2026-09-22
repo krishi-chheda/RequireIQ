@@ -470,7 +470,7 @@ export function TableFrame({
   return (
     <div className={cx("overflow-x-auto", className)}>
       <table
-        className="w-full border-collapse text-left text-[12.5px]"
+        className="table-sticky-first w-full border-collapse text-left text-[12.5px]"
         style={{ minWidth: `${minWidth}px` }}
       >
         {children}

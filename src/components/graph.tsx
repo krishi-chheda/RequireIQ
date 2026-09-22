@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import type { GraphEdge, GraphNode } from "@/lib/queries";
 import { RELATIONSHIP_LABEL, REQUIREMENT_TYPE_LABEL, type RelationshipKind } from "@/lib/types";
-import { Badge, Eyebrow, Ref, cx } from "./ui";
+import { Badge, Eyebrow, Ref, TableFrame, Td, Th, cx } from "./ui";
 
 /**
  * The requirement relationship graph.
@@ -21,32 +21,40 @@ import { Badge, Eyebrow, Ref, cx } from "./ui";
  */
 
 const GROUP_COLOUR: Record<string, string> = {
-  functional: "#6f93f5",
-  non_functional: "#8b95a6",
-  performance: "#f08c3a",
-  security: "#f2555a",
-  compliance: "#a98bf0",
-  operational: "#35b87d",
-  technical: "#4bb3c9",
-  business: "#d9b02c",
-  ux: "#e07ab8",
-  budget: "#d9b02c",
-  timeline: "#f08c3a",
-  regulatory: "#a98bf0",
-  organisational: "#8b95a6",
+  functional: "var(--color-class-functional)",
+  non_functional: "var(--color-class-non-functional)",
+  performance: "var(--color-class-performance)",
+  security: "var(--color-class-security)",
+  compliance: "var(--color-class-compliance)",
+  operational: "var(--color-class-operational)",
+  technical: "var(--color-class-technical)",
+  business: "var(--color-class-business)",
+  ux: "var(--color-class-ux)",
+  budget: "var(--color-class-budget)",
+  timeline: "var(--color-class-timeline)",
+  regulatory: "var(--color-class-regulatory)",
+  organisational: "var(--color-class-organisational)",
 };
 
 const EDGE_STYLE: Record<RelationshipKind, { stroke: string; width: number; dash?: string }> = {
   contradicts: { stroke: "var(--color-critical)", width: 1.6 },
-  duplicates: { stroke: "#a98bf0", width: 1.1, dash: "4 3" },
-  depends_on: { stroke: "#6f93f5", width: 1.1 },
-  supports: { stroke: "#3a414d", width: 0.8 },
-  derived_from: { stroke: "#6f93f5", width: 1, dash: "2 3" },
-  impacts: { stroke: "#8b95a6", width: 0.9 },
+  duplicates: { stroke: "var(--color-rel-duplicates)", width: 1.1, dash: "4 3" },
+  depends_on: { stroke: "var(--color-rel-depends)", width: 1.1 },
+  supports: { stroke: "var(--color-rel-supports)", width: 0.8 },
+  derived_from: { stroke: "var(--color-rel-depends)", width: 1, dash: "2 3" },
+  impacts: { stroke: "var(--color-rel-impacts)", width: 0.9 },
 };
 
 const SIZE = 760;
 const CENTRE = SIZE / 2;
+
+/**
+ * Only `Math.cos`/`Math.sin` are allowed to disagree between engines; the four
+ * arithmetic operators are exactly specified by IEEE 754, so rounding the trig
+ * output once here makes every coordinate derived from it identical on the
+ * server and in the browser.
+ */
+const round2 = (value: number): number => Math.round(value * 100) / 100;
 
 export function RequirementGraph({
   nodes,
@@ -87,9 +95,14 @@ export function RequirementGraph({
         const theta = angle + withinArc;
         // Alternate rings so dense groups stay legible.
         const radius = index % 2 === 0 ? 268 : 212;
+        // Rounded to 2dp. Unrounded, Math.cos/sin differ by one ULP between
+        // Node and the browser's V8, so the server's coordinate string and the
+        // client's disagree in the 13th decimal and React reports a hydration
+        // mismatch on every load. Sub-pixel precision buys nothing in a 760
+        // unit viewBox.
         placed.set(node.id, {
-          x: CENTRE + Math.cos(theta) * radius,
-          y: CENTRE + Math.sin(theta) * radius,
+          x: round2(CENTRE + Math.cos(theta) * radius),
+          y: round2(CENTRE + Math.sin(theta) * radius),
         });
       });
       angle += arc;
@@ -156,12 +169,16 @@ export function RequirementGraph({
           ) : null}
         </div>
 
-        <svg
-          viewBox={`0 0 ${SIZE} ${SIZE}`}
-          className="h-auto w-full"
-          role="img"
-          aria-label={`Relationship graph: ${nodes.length} records connected by ${visibleEdges.length} edges. The table beside this graph lists the same relationships.`}
-        >
+        {/* Hidden from assistive technology on purpose.
+
+            `role="img"` here used to take the node <g> elements out of the
+            accessibility tree while leaving them tabbable, so a keyboard
+            reader landed on 82 stops that announced nothing, and the label
+            promised a table that did not exist. A radial SVG is not navigable
+            by keyboard whatever is done to it, so the picture is now purely
+            visual and the relationship table below carries the same data with
+            the same links. */}
+        <svg viewBox={`0 0 ${SIZE} ${SIZE}`} className="h-auto w-full" aria-hidden>
           <g>
             {/* Non-contradiction edges first, so contradictions draw on top. */}
             {[...visibleEdges]
@@ -201,7 +218,7 @@ export function RequirementGraph({
               if (!position) return null;
               const dimmed = neighbours && !neighbours.has(node.id);
               const radius = Math.min(11, 4.5 + node.weight * 0.7);
-              const colour = GROUP_COLOUR[node.group] ?? "#8b95a6";
+              const colour = GROUP_COLOUR[node.group] ?? "var(--color-class-unknown)";
 
               return (
                 <g
@@ -210,15 +227,6 @@ export function RequirementGraph({
                   opacity={dimmed ? 0.18 : 1}
                   className="cursor-pointer transition-opacity duration-200"
                   onClick={() => setFocus((current) => (current === node.id ? null : node.id))}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" || event.key === " ") {
-                      event.preventDefault();
-                      setFocus((current) => (current === node.id ? null : node.id));
-                    }
-                  }}
-                  aria-label={`${node.ref}: ${node.label}`}
                 >
                   <circle
                     r={radius}
@@ -249,6 +257,8 @@ export function RequirementGraph({
           <span>Size: number of connections</span>
           <span>Colour: class</span>
         </div>
+
+        <RelationshipList nodes={nodes} edges={visibleEdges} projectId={projectId} />
       </div>
 
       <aside className="space-y-4">
@@ -304,5 +314,97 @@ export function RequirementGraph({
         )}
       </aside>
     </div>
+  );
+}
+
+/**
+ * The graph as text.
+ *
+ * Not a fallback - the SVG is `aria-hidden`, so this is the only path to the
+ * relationship data for a keyboard or screen-reader user, and it is the same
+ * data rather than a summary of it. Collapsed by default because a reader who
+ * can see the picture usually wants the picture; open it and every edge is a
+ * row with both records linked and the rationale that produced it.
+ */
+function RelationshipList({
+  nodes,
+  edges,
+  projectId,
+}: {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+  projectId: string;
+}) {
+  const byId = new Map(nodes.map((node) => [node.id, node]));
+
+  return (
+    <details className="border-t border-line">
+      <summary className="cursor-pointer px-4 py-2.5 text-[11.5px] text-brand-ink hover:text-ink">
+        Relationships as a list ({edges.length})
+      </summary>
+      {edges.length === 0 ? (
+        <p className="px-4 pb-4 text-[12px] text-ink-muted">
+          No relationships above the overlap threshold with the current edge filter.
+        </p>
+      ) : (
+        <TableFrame minWidth={720} className="border-t border-line">
+          <caption className="sr-only">
+            Every relationship drawn in the graph above, with the record at each end and the reason the
+            link was inferred.
+          </caption>
+          <thead>
+            <tr>
+              <Th className="w-28">From</Th>
+              <Th className="w-32">Relationship</Th>
+              <Th className="w-28">To</Th>
+              <Th>Why</Th>
+            </tr>
+          </thead>
+          <tbody>
+            {edges.map((edge, index) => {
+              const from = byId.get(edge.source);
+              const to = byId.get(edge.target);
+              if (!from || !to) return null;
+              return (
+                <tr key={`${edge.source}-${edge.target}-${index}`}>
+                  <Td>
+                    <NodeLink node={from} projectId={projectId} />
+                  </Td>
+                  <Td>
+                    <Badge tone={edge.kind === "contradicts" ? "critical" : "neutral"}>
+                      {RELATIONSHIP_LABEL[edge.kind]}
+                    </Badge>
+                  </Td>
+                  <Td>
+                    <NodeLink node={to} projectId={projectId} />
+                  </Td>
+                  <Td className="text-[11.5px] leading-relaxed">{edge.rationale}</Td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </TableFrame>
+      )}
+    </details>
+  );
+}
+
+/** A requirement links to its record; a constraint has no page of its own. */
+function NodeLink({ node, projectId }: { node: GraphNode; projectId: string }) {
+  if (node.kind !== "requirement") {
+    return (
+      <span title={node.label}>
+        <Ref>{node.ref}</Ref>
+      </span>
+    );
+  }
+  return (
+    <Link
+      href={`/app/projects/${projectId}/requirements/${node.id}`}
+      title={node.label}
+      className="text-brand-ink hover:underline"
+    >
+      <Ref>{node.ref}</Ref>
+    </Link>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { cloneElement, isValidElement, useActionState } from "react";
 import { useFormStatus } from "react-dom";
 import type { ActionResult } from "@/lib/server-actions";
 import { buttonClass, cx, type BUTTON_VARIANTS } from "./ui";
@@ -47,13 +47,19 @@ export function SubmitButton({
   );
 }
 
-/** Result banner. `role="status"` so the outcome is announced, not just shown. */
+/**
+ * Result banner.
+ *
+ * A success is announced politely; a failure interrupts. A rejected write that
+ * a screen reader queues behind whatever else is speaking is a write the
+ * reviewer believes went through.
+ */
 export function ActionMessage({ state }: { state: ActionResult | null }) {
   if (!state) return null;
   return (
     <p
-      role="status"
-      aria-live="polite"
+      role={state.ok ? "status" : "alert"}
+      aria-live={state.ok ? "polite" : "assertive"}
       className={cx(
         "mt-2 rounded-sm border px-3 py-2 text-[12px]",
         state.ok
@@ -92,6 +98,15 @@ export function ActionForm({
   );
 }
 
+/**
+ * Labelled form control.
+ *
+ * The hint is wired to the control with `aria-describedby` here rather than at
+ * each call site, so a field cannot ship with a hint that only sighted readers
+ * get. Every caller already passes `htmlFor` matching its child's `id`, so the
+ * hint's id is derived from it and the control is cloned to carry the
+ * reference - no call site has to remember.
+ */
 export function Field({
   label,
   hint,
@@ -103,6 +118,8 @@ export function Field({
   children: React.ReactNode;
   htmlFor: string;
 }) {
+  const hintId = hint ? `${htmlFor}-hint` : undefined;
+
   return (
     <div>
       <label
@@ -111,11 +128,30 @@ export function Field({
       >
         {label}
       </label>
-      {hint ? <p className="mt-1 text-[11.5px] leading-relaxed text-ink-faint">{hint}</p> : null}
-      <div className="mt-1.5">{children}</div>
+      {hint ? (
+        <p id={hintId} className="mt-1 text-[11.5px] leading-relaxed text-ink-faint">
+          {hint}
+        </p>
+      ) : null}
+      <div className="mt-1.5">{describedBy(children, hintId)}</div>
     </div>
   );
 }
 
+/** Adds `aria-describedby` to a single element child, preserving any it already has. */
+function describedBy(children: React.ReactNode, hintId: string | undefined): React.ReactNode {
+  if (!hintId || !isValidElement(children)) return children;
+  const element = children as React.ReactElement<{ "aria-describedby"?: string }>;
+  const existing = element.props["aria-describedby"];
+  return cloneElement(element, {
+    "aria-describedby": existing ? `${existing} ${hintId}` : hintId,
+  });
+}
+
+/**
+ * Focus is left to the global `:focus-visible` ring in `globals.css`. A 1px
+ * border-colour change is not an equivalent indicator, so this class must never
+ * suppress the outline.
+ */
 export const INPUT_CLASS =
-  "w-full rounded-sm border border-edge bg-canvas px-3 py-2 text-[12.5px] text-ink placeholder:text-ink-faint transition-colors focus:border-brand focus:outline-none focus-visible:outline-none";
+  "w-full rounded-sm border border-edge bg-canvas px-3 py-2 text-[12.5px] text-ink placeholder:text-ink-faint transition-colors focus:border-brand";
