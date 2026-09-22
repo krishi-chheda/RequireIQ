@@ -161,10 +161,12 @@ export function PipelineFlow({ stages }: { stages: FlowStage[] }) {
       {stages.map((stage, index) => (
         <li
           key={stage.stage}
-          className={cx(
-            "relative bg-surface p-5",
-            index === stages.length - 1 && "sm:col-span-2 lg:col-span-1",
-          )}
+          // The hairlines are the parent's background showing through a 1px
+          // gap, so a grid cell with no child renders as a solid block of
+          // `line`. Seven stages in two or four columns leaves exactly one, so
+          // the last stage spans the remainder at every breakpoint above base.
+          // Do not add an `lg:col-span-1` here - it reopens the hole.
+          className={cx("bg-surface p-5", index === stages.length - 1 && "sm:col-span-2")}
         >
           <div className="flex items-center gap-2">
             <span data-numeric className="font-mono text-[10.5px] text-ink-faint">
