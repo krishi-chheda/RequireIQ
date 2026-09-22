@@ -72,11 +72,21 @@ available as utility classes: `bg-surface`, `text-ink-muted`, `border-line`,
 | Type | One family (`--font-sans`) plus `--font-mono` for IDs, offsets and locators. Base 14px, line-height 1.55. |
 | Numerals | Anything a reader compares column-wise carries `data-numeric` or lives in a `<table>` (both get `tabular-nums`). |
 
-**Raw hex, raw px and raw rgba are not allowed in `src/components` or
-`src/app/**/page.tsx`.** There are ~23 raw hex values today, mostly the graph's
-`GROUP_COLOUR` and `EDGE_STYLE` maps in `src/components/graph.tsx`. Those are
-debt: when you touch that file, promote them to `--color-class-*` tokens in
-`globals.css` rather than adding more.
+| Graph classes | `--color-class-*`, one per requirement class plus `unknown`. A categorical palette, separate from severity and provenance even where a value coincides — a class is not a severity. |
+| Graph edges | `--color-rel-*`, except `contradicts`, which uses `--color-critical` because it is the only edge that means a problem. |
+
+**Raw hex, raw px and raw rgba are not allowed anywhere under `src/` except
+`globals.css`.** This is enforced, not requested: `src/test/design-tokens.test.ts`
+fails the build on a raw six-digit hex in any `.ts`/`.tsx` file and names the
+file and line. There is exactly one exemption, `src/app/layout.tsx`, because
+`<meta name="theme-color">` is read before any stylesheet is parsed and cannot
+reference a custom property — and that literal is itself asserted equal to
+`--color-canvas`.
+
+The same test asserts every text token clears AA on all five surfaces, that the
+soft-background pairs clear AA, that white-on-brand stays above 4.5, and that
+every `--color-class-*` and `--color-rel-*` clears 3:1 on `surface`. Add a
+colour and you add it to `globals.css` or the build stops.
 
 Dark only, on purpose (`color-scheme: dark`). Do not add a light theme unless
 asked; if asked, it is a token-layer change in `globals.css`, not per-component
@@ -178,9 +188,11 @@ Before you say a UI change is done:
    in a sensible order.
 4. Check the three states exist (force the empty one with a filter that matches
    nothing).
-5. Grep the changed files for raw six-digit hex; there must be nothing new.
+5. The token gate in `src/test/design-tokens.test.ts` runs inside step 1. If it
+   names a file, fix the file — do not add an exemption. The one existing
+   exemption has a reason written next to it; a second one needs the same.
 6. Confirm the per-page JS bundle did not grow. This app ships 103 kB shared and
-   134 B – 3.02 kB per page. A new client component that pushes a page past
+   134 B – 3.01 kB per page. A new client component that pushes a page past
    ~5 kB needs a reason.
 7. Say in the summary what you changed, what you did not, and anything that
    needs a human decision.

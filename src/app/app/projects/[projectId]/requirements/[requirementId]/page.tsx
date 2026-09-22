@@ -237,7 +237,7 @@ export default async function RequirementDetailPage({
 
                         <p className="mt-2 text-[12.5px] leading-relaxed text-ink-muted">{finding.explanation}</p>
 
-                        <div className="mt-3 rounded-sm border border-prov-suggest/25 bg-[#170f26]/60 px-3 py-2.5">
+                        <div className="mt-3 rounded-sm border border-prov-suggest/25 bg-prov-suggest-soft/60 px-3 py-2.5">
                           <p className="text-[10.5px] font-semibold uppercase tracking-[0.11em] text-prov-suggest">
                             Suggested rewrite
                           </p>

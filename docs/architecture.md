@@ -55,7 +55,7 @@ uploaded document.
 server. There is no API layer between a page and its data, and no client-side
 data fetching, so there is no loading waterfall and no cache to invalidate.
 
-Cost: 103 kB shared JS, per-page 134 B – 3.02 kB.
+Cost: 103 kB shared JS, per-page 134 B – 3.01 kB.
 
 **Twelve client components**, each for a reason that cannot be met on the server:
 

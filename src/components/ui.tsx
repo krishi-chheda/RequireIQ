@@ -207,7 +207,7 @@ export function ProvenanceTag({
       hint: "A machine reading of source text. Traceable to evidence, not authoritative.",
     },
     ai_suggestion: {
-      chip: "border-prov-suggest/30 bg-[#170f26] text-prov-suggest",
+      chip: "border-prov-suggest/30 bg-prov-suggest-soft text-prov-suggest",
       dot: "bg-prov-suggest",
       hint: "A proposal. Nothing is applied without a human action.",
     },

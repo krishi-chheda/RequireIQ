@@ -111,7 +111,7 @@ export function ReviewPanel({
               />
             </Field>
             {suggestion ? (
-              <p className="rounded-sm border border-prov-suggest/25 bg-[#170f26] px-3 py-2 text-[11.5px] leading-relaxed text-prov-suggest">
+              <p className="rounded-sm border border-prov-suggest/25 bg-prov-suggest-soft px-3 py-2 text-[11.5px] leading-relaxed text-prov-suggest">
                 Suggested rewrite: {suggestion}
               </p>
             ) : null}

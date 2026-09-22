@@ -137,7 +137,7 @@ Browser
 
 **Next.js App Router, server-component-first.** Pages read SQLite directly and
 render on the server; mutations go through server actions. The result is 103 kB
-of shared JavaScript and per-page bundles of 134 B – 3.02 kB. Twelve of the
+of shared JavaScript and per-page bundles of 134 B – 3.01 kB. Twelve of the
 fifty-odd components are client components, each because it genuinely needs
 browser state; everything else renders on the server.
 
@@ -473,7 +473,7 @@ scrolls horizontally. Verified at 375 px with zero overflow.
 
 ## Performance
 
-- Server components by default: 103 kB shared JS, per-page 134 B – 3.02 kB.
+- Server components by default: 103 kB shared JS, per-page 134 B – 3.01 kB.
 - Twelve client components total, each with a reason (listed in `docs/architecture.md`).
 - The graph uses a deterministic radial layout, not a force simulation — no
   animation frame loop, and the same register always draws the same picture.
