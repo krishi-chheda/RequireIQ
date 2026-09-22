@@ -1,7 +1,8 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { Wordmark } from "@/components/brand";
-import { Badge, Eyebrow, LinkButton, buttonClass } from "@/components/ui";
+import { getProjectSummary, listProjects } from "@/lib/queries";
+import { Badge, Eyebrow, LinkButton, buttonClass, cx, formatNumber } from "@/components/ui";
 import { ConflictDemo } from "@/components/conflict-demo";
 
 export const metadata: Metadata = {
@@ -91,7 +92,18 @@ const CAPABILITIES = [
   },
 ];
 
+/**
+ * Read per request, like the dashboard, because the figures at the foot of the
+ * page are counted from the same database a reviewer can change. A statically
+ * prerendered landing page would keep advertising the counts that happened to
+ * be true at build time.
+ */
+export const dynamic = "force-dynamic";
+
 export default function LandingPage() {
+  const [firstProject] = listProjects();
+  const demo = firstProject ? getProjectSummary(firstProject.id) : null;
+
   return (
     <div className="min-h-screen bg-canvas">
       <header className="sticky top-0 z-20 border-b border-line bg-canvas/85 backdrop-blur">
@@ -154,7 +166,7 @@ export default function LandingPage() {
         <section id="scenario" className="border-b border-line bg-surface">
           <div className="mx-auto max-w-6xl px-5 py-16 sm:px-8">
             <Eyebrow>The failure this prevents</Eyebrow>
-            <div className="mt-6">
+            <div className="mt-3">
               <div>
                 <h2 className="max-w-2xl text-[22px] font-semibold tracking-[-0.02em] text-ink">
                   Two sentences, eleven weeks apart, in documents nobody read together.
@@ -202,9 +214,17 @@ export default function LandingPage() {
             <h2 className="mt-3 max-w-2xl text-[22px] font-semibold tracking-[-0.02em] text-ink">
               Unstructured material in, a reviewable register out. Nothing skips the human.
             </h2>
+            {/* The hairlines are the parent's background showing through a 1px
+                gap, so any grid cell without a child renders as a solid block
+                of `line`. Seven steps in two or four columns leaves exactly one
+                such cell, so the last step spans the remainder and the grid
+                stays whole. */}
             <ol className="mt-8 grid gap-px overflow-hidden rounded-lg border border-line bg-line sm:grid-cols-2 lg:grid-cols-4">
               {PIPELINE.map((step, index) => (
-                <li key={step.stage} className="bg-surface p-5">
+                <li
+                  key={step.stage}
+                  className={cx("bg-surface p-5", index === PIPELINE.length - 1 && "sm:col-span-2")}
+                >
                   <span data-numeric className="font-mono text-[11px] text-brand-ink">
                     {String(index + 1).padStart(2, "0")}
                   </span>
@@ -220,6 +240,11 @@ export default function LandingPage() {
         <section className="border-b border-line bg-surface">
           <div className="mx-auto max-w-6xl px-5 py-16 sm:px-8">
             <Eyebrow>What it actually does</Eyebrow>
+            {/* Without this the document went h1 -> h3 and a screen-reader
+                user skipping by heading lost the section boundary. */}
+            <h2 className="mt-3 max-w-2xl text-[22px] font-semibold tracking-[-0.02em] text-ink">
+              Four things, each one checkable against the record behind it.
+            </h2>
             <div className="mt-8 grid gap-5 lg:grid-cols-2">
               {/* `<details>` rather than a state hook: it opens without
                   JavaScript, is keyboard operable and announced correctly for
@@ -259,46 +284,100 @@ export default function LandingPage() {
         {/* Honesty */}
         <section className="border-b border-line">
           <div className="mx-auto max-w-6xl px-5 py-16 sm:px-8">
-            <div className="grid gap-8 lg:grid-cols-[1fr_1.3fr]">
-              <div>
-                <Eyebrow>Where the intelligence comes from</Eyebrow>
-                <h2 className="mt-3 text-[22px] font-semibold tracking-[-0.02em] text-ink">
-                  Deterministic by default, and explicit about it.
-                </h2>
+            <Eyebrow>Where the intelligence comes from</Eyebrow>
+            <h2 className="mt-3 max-w-2xl text-[22px] font-semibold tracking-[-0.02em] text-ink">
+              Deterministic by default, and explicit about which half is which.
+            </h2>
+            <p className="mt-3 max-w-3xl text-[13.5px] leading-relaxed text-ink-muted">
+              A requirements tool has to cite exact character offsets in a client document and produce an
+              audit trail that holds up months later. A sampled model is a poor fit for both, so the analysis
+              does not use one — and the page says plainly where the line falls.
+            </p>
+
+            {/* Two columns rather than three paragraphs: which work is
+                deterministic and which is not is the single fact this section
+                exists to convey, and prose buried it. */}
+            <div className="mt-8 grid gap-px overflow-hidden rounded-lg border border-line bg-line lg:grid-cols-2">
+              <div className="bg-surface p-6">
+                <div className="flex items-center gap-2">
+                  <span aria-hidden className="size-1.5 rounded-full bg-positive" />
+                  <p className="text-[13px] font-semibold text-ink">Local engine · always on</p>
+                </div>
+                <p className="mt-3 text-[13px] leading-relaxed text-ink-muted">
+                  Extraction, classification, quality analysis, conflict detection and coverage. Rules and
+                  statistics, no model call, no credential. The same corpus produces the same register every
+                  time.
+                </p>
+                <ul className="mt-4 space-y-1.5 border-t border-line pt-3 text-[12px] text-ink-faint">
+                  <li>Runs offline. Nothing leaves the machine.</li>
+                  <li>Byte-identical output across runs.</li>
+                  <li>No generative step, so no invented requirement.</li>
+                </ul>
               </div>
-              <div className="space-y-4 text-[13px] leading-relaxed text-ink-muted">
-                <p>
-                  Extraction, classification, quality analysis and conflict detection run on a local rule and
-                  statistics engine. No model call, no credential, and the same corpus produces the same
-                  register every time. That is not a limitation dressed up as a feature: a requirements tool
-                  has to cite exact character offsets in a client document and produce an audit trail that
-                  holds up months later, and a sampled model is a poor fit for both.
+
+              <div className="bg-surface p-6">
+                <div className="flex items-center gap-2">
+                  <span aria-hidden className="size-1.5 rounded-full bg-prov-ai" />
+                  <p className="text-[13px] font-semibold text-ink">Hosted model · optional, opt-in</p>
+                </div>
+                <p className="mt-3 text-[13px] leading-relaxed text-ink-muted">
+                  Free-form question answering only, where it genuinely helps, and every answer is rendered
+                  next to the records it was drawn from. It implements the same interface the local engine
+                  implements, so enabling it changes no screen.
                 </p>
-                <p>
-                  A hosted model can be enabled for free-form question answering only, where it helps and
-                  where every answer is rendered next to the records it was drawn from. The interface it
-                  implements is the same one the local engine implements, so swapping it changes no screen.
-                </p>
-                <p className="text-ink-faint">
-                  Every record in the product is labelled with how it came to exist: source evidence, machine
-                  reading, proposal, or human-authored. When the evidence does not support an answer, the
-                  product says so instead of producing one.
-                </p>
+                <ul className="mt-4 space-y-1.5 border-t border-line pt-3 text-[12px] text-ink-faint">
+                  <li>Never touches extraction or conflict detection.</li>
+                  <li>Answers carry their citations or they are not shown.</li>
+                  <li>Below the relevance floor it returns &ldquo;Insufficient evidence&rdquo;.</li>
+                </ul>
               </div>
             </div>
           </div>
         </section>
 
         <section>
-          <div className="mx-auto max-w-6xl px-5 py-16 text-center sm:px-8">
-            <h2 className="text-[24px] font-semibold tracking-[-0.02em] text-ink">
-              The demo engagement is already loaded.
-            </h2>
-            <p className="mx-auto mt-3 max-w-xl text-[13.5px] leading-relaxed text-ink-muted">
-              Fifteen documents, eighty-two extracted requirements, seven cross-document conflicts and a guided
-              walkthrough that gets to the point in about three minutes.
-            </p>
-            <div className="mt-7 flex justify-center">
+          <div className="mx-auto max-w-6xl px-5 py-16 sm:px-8">
+            <div className="mx-auto max-w-2xl text-center">
+              <h2 className="text-[24px] font-semibold tracking-[-0.02em] text-ink">
+                The demo engagement is already loaded.
+              </h2>
+              <p className="mt-3 text-[13.5px] leading-relaxed text-ink-muted">
+                A worked replacement of a bank&rsquo;s branch-first account origination, with a guided
+                walkthrough that gets to the point in about three minutes.
+              </p>
+            </div>
+
+            {/* Counted from the database at request time, and each one links to
+                the screen that would let a reader act on it. Hardcoding these
+                would put the landing page and the register one seed apart from
+                disagreeing with each other. */}
+            {demo ? (
+              <ul className="mx-auto mt-9 grid max-w-4xl gap-px overflow-hidden rounded-lg border border-line bg-line sm:grid-cols-2 lg:grid-cols-4">
+                {[
+                  { value: demo.documents, label: "Documents ingested", href: "/documents" },
+                  { value: demo.requirements, label: "Requirements extracted", href: "/requirements" },
+                  { value: demo.openConflicts, label: "Cross-document conflicts", href: "/conflicts" },
+                  { value: demo.openAmbiguities, label: "Open quality findings", href: "/requirements?view=findings" },
+                ].map((stat) => (
+                  <li key={stat.label} className="bg-surface">
+                    <Link
+                      href={`/app/projects/${demo.project.id}${stat.href}`}
+                      className="block px-5 py-5 text-center transition-colors hover:bg-hover"
+                    >
+                      <span
+                        data-numeric
+                        className="block text-[26px] font-semibold tracking-[-0.02em] text-ink"
+                      >
+                        {formatNumber(stat.value)}
+                      </span>
+                      <span className="mt-1 block text-[11.5px] text-ink-muted">{stat.label}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+
+            <div className="mt-9 flex justify-center">
               <LinkButton href="/app" variant="primary" className="px-4 py-2 text-[13.5px]">
                 Open the workspace
               </LinkButton>
