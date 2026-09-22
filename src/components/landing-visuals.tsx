@@ -273,3 +273,175 @@ export function ConflictTimeline({
     </div>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Annotated statement
+// ---------------------------------------------------------------------------
+
+/**
+ * A real requirement with a real finding marked on it.
+ *
+ * The span is sliced out of the stored statement using the stored character
+ * offsets, so this is not an illustration of the offset claim - it is the
+ * claim, executing. If the offsets ever stopped lining up, this would render
+ * visibly wrong.
+ */
+export function AnnotatedStatement({
+  reference,
+  statement,
+  start,
+  end,
+  note,
+  suggestion,
+}: {
+  reference: string;
+  statement: string;
+  start: number;
+  end: number;
+  note: string;
+  suggestion: string;
+}) {
+  const before = statement.slice(0, start);
+  const span = statement.slice(start, end);
+  const after = statement.slice(end);
+
+  return (
+    <div className="rounded-md border border-line bg-surface p-4">
+      <div className="flex items-center gap-2">
+        <span className="font-mono text-[11px] text-ink-faint">{reference}</span>
+        <span className="font-mono text-[10.5px] text-ink-faint">
+          chars {start}&ndash;{end}
+        </span>
+      </div>
+      <p className="mt-2.5 text-[12.5px] leading-relaxed text-ink-muted">
+        {before}
+        <mark className="rounded-xs bg-medium-soft px-1 font-medium text-medium">{span}</mark>
+        {after}
+      </p>
+      <p className="mt-3 border-t border-line pt-3 text-[11.5px] leading-relaxed text-ink-faint">{note}</p>
+      <p className="mt-2 text-[11.5px] leading-relaxed text-positive">{suggestion}</p>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Traceability chain
+// ---------------------------------------------------------------------------
+
+/** The hops a record can be followed back through, drawn as the chain it is. */
+export function TraceChain({ steps }: { steps: string[] }) {
+  return (
+    <ol className="flex flex-wrap items-center gap-x-1.5 gap-y-2">
+      {steps.map((step, index) => (
+        <li key={step} className="flex items-center gap-1.5">
+          <span className="rounded-xs border border-edge bg-overlay px-2 py-1 text-[11px] text-ink-muted">
+            {step}
+          </span>
+          {index < steps.length - 1 ? (
+            <span aria-hidden className="text-[11px] text-ink-faint">
+              &rarr;
+            </span>
+          ) : null}
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Coverage grid
+// ---------------------------------------------------------------------------
+
+/**
+ * The checklist as a status grid.
+ *
+ * Flagged areas are named; the remainder are counted rather than listed,
+ * because "no gap raised" is not the same claim as "specified well" and this
+ * grid should not imply the stronger one.
+ */
+export function CoverageGrid({ flagged, total }: { flagged: string[]; total: number }) {
+  return (
+    <div>
+      <ul className="space-y-1.5">
+        {flagged.map((area) => (
+          <li key={area} className="flex items-start gap-2">
+            <span aria-hidden className="mt-1.5 size-1.5 shrink-0 rounded-full bg-high" />
+            <span className="text-[12px] leading-relaxed text-ink-muted">{area}</span>
+            <span className="ml-auto shrink-0 text-[10.5px] uppercase tracking-[0.08em] text-high">
+              Unspecified
+            </span>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-3 border-t border-line pt-3 text-[11.5px] text-ink-faint">
+        <span data-numeric className="text-ink-muted">
+          {flagged.length} of {total}
+        </span>{" "}
+        checklist areas flagged. The rest raised no gap, which is not the same as being specified well.
+      </p>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Where the model is, and is not
+// ---------------------------------------------------------------------------
+
+/**
+ * The deterministic boundary, drawn.
+ *
+ * The point this section has to land is that the optional hosted model touches
+ * none of the analysis path. A row of stages all marked local, with the
+ * assistant sitting outside it, says that in one look; three paragraphs did
+ * not.
+ */
+export function EngineSplit({ stages }: { stages: string[] }) {
+  return (
+    <div className="grid gap-4 lg:grid-cols-[1fr_auto_260px] lg:items-stretch">
+      <div className="rounded-lg border border-positive/25 bg-surface p-5">
+        <div className="flex items-center gap-2">
+          <span aria-hidden className="size-1.5 rounded-full bg-positive" />
+          <p className="text-[12.5px] font-semibold text-ink">The analysis path</p>
+          <span className="ml-auto text-[10.5px] uppercase tracking-[0.08em] text-positive">
+            Local · deterministic
+          </span>
+        </div>
+        <ul className="mt-4 flex flex-wrap gap-1.5">
+          {stages.map((stage) => (
+            <li
+              key={stage}
+              className="rounded-xs border border-positive/25 bg-positive-soft/50 px-2 py-1 text-[11px] text-ink-muted"
+            >
+              {stage}
+            </li>
+          ))}
+        </ul>
+        <p className="mt-4 border-t border-line pt-3 text-[11.5px] leading-relaxed text-ink-faint">
+          Rules and statistics. No model call, no credential, no network. The same corpus produces a
+          byte-identical register every run, and there is no generative step that could invent a
+          requirement.
+        </p>
+      </div>
+
+      <div aria-hidden className="hidden items-center justify-center lg:flex">
+        <div className="h-full w-px bg-line" />
+      </div>
+
+      <div className="rounded-lg border border-line bg-surface p-5">
+        <div className="flex items-center gap-2">
+          <span aria-hidden className="size-1.5 rounded-full bg-prov-ai" />
+          <p className="text-[12.5px] font-semibold text-ink">Assistant</p>
+        </div>
+        <p className="mt-1.5 text-[10.5px] uppercase tracking-[0.08em] text-prov-ai">Hosted · optional</p>
+        <p className="mt-4 text-[11.5px] leading-relaxed text-ink-muted">
+          Free-form question answering, and nothing else. It sits outside the path on the left and cannot
+          reach any stage in it.
+        </p>
+        <p className="mt-3 border-t border-line pt-3 text-[11.5px] leading-relaxed text-ink-faint">
+          Answers carry their citations or they are not shown. Below the relevance floor it returns
+          &ldquo;Insufficient evidence&rdquo;.
+        </p>
+      </div>
+    </div>
+  );
+}

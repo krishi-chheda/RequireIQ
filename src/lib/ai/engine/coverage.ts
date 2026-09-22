@@ -111,6 +111,15 @@ const COVERAGE_RULES: CoverageRule[] = [
   },
 ];
 
+/**
+ * How many areas the checklist covers.
+ *
+ * Derived, not written down: "six gaps" means nothing without the
+ * denominator, and a hardcoded denominator goes stale the first time someone
+ * adds a rule.
+ */
+export const COVERAGE_AREA_COUNT = COVERAGE_RULES.length;
+
 export interface DetectedGap {
   area: string;
   expectation: string;
