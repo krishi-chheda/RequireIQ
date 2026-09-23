@@ -117,7 +117,7 @@ export default async function RequirementDetailPage({
                   {owner.name}, {owner.role}
                 </span>
               ) : (
-                <span className="text-high">unassigned</span>
+                <span className="text-high-ink">unassigned</span>
               )}
             </span>
           </div>
@@ -185,7 +185,7 @@ export default async function RequirementDetailPage({
                     {requirement.acceptanceCriteria ? (
                       <span className="text-ink-muted">{requirement.acceptanceCriteria}</span>
                     ) : (
-                      <span className="text-high">
+                      <span className="text-high-ink">
                         None recorded. The engine does not invent acceptance criteria - where the source
                         statement contains no measurable clause, the absence is reported rather than filled in.
                       </span>
@@ -229,7 +229,7 @@ export default async function RequirementDetailPage({
                         {finding.spanEnd - finding.spanStart < requirement.statement.length ? (
                           <p className="mt-2.5 text-[12.5px] text-ink-muted">
                             Triggered by:{" "}
-                            <span className="rounded-xs bg-high/15 px-1 font-medium text-high">
+                            <span className="rounded-xs bg-high/15 px-1 font-medium text-high-ink">
                               {finding.span}
                             </span>
                           </p>

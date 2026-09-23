@@ -56,7 +56,7 @@ export default async function GraphPage({
                     <p
                       data-numeric
                       className={`mt-1.5 text-[22px] font-semibold tracking-[-0.03em] ${
-                        kind === "contradicts" ? "text-critical" : "text-ink"
+                        kind === "contradicts" ? "text-critical-ink" : "text-ink"
                       }`}
                     >
                       {count}

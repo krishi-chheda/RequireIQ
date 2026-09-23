@@ -16,8 +16,9 @@ verify is a defect, not a style preference.
 
 ## 0. Before you change anything
 
-1. Read `src/app/globals.css`. It is the whole token system, with the reasoning
-   in comments. Do not skim it.
+1. Read `src/app/tokens.css`. It is the whole token system - both modes - with
+   the reasoning in comments. Do not skim it. `globals.css` holds base styles
+   and imports it.
 2. Read `src/components/ui.tsx`. It is the whole component kit — 25 exports.
 3. Grep for the thing you are about to build. `Badge`, `Stat`, `Meter`,
    `EmptyState`, `Callout`, `SkeletonRows`, `TableFrame`/`Th`/`Td`,
@@ -56,19 +57,25 @@ describe the change before making it.
 
 ## 2. Visual language — use the tokens, never raw values
 
-All tokens are Tailwind v4 `@theme` entries in `src/app/globals.css`, so they are
-available as utility classes: `bg-surface`, `text-ink-muted`, `border-line`,
-`text-critical`, `bg-brand-soft`, `rounded-sm`.
+All tokens live in `src/app/tokens.css` and are available as utility classes:
+`bg-surface`, `text-ink-muted`, `border-line`, `bg-brand-soft`, `rounded-sm`.
+
+**The app ships light and dark.** `@theme` carries the dark values;
+`:root[data-theme="light"]` re-declares them. An inline script in the root
+layout resolves the stored choice or the system preference before first paint.
+Component code never branches on theme - if you find yourself writing a
+`dark:` variant, the token is missing instead.
 
 | Axis | Rule |
 |---|---|
 | Surfaces | `canvas` → `surface` → `raised` → `overlay` → `hover`. Five steps, in that order. Do not invent a sixth. |
 | Hairlines | `line` by default, `edge` for emphasis. Never a shadow where a hairline will do. |
 | Text | `ink` / `ink-muted` / `ink-faint`. All three clear WCAG AA against all five surfaces — verified. Do not add a fainter step. |
-| Severity | `critical` / `high` / `medium` / `low` and their `-soft` backgrounds. Reserved for severity. |
+| Severity marks | `critical` / `high` / `medium` / `low`. **Mode-invariant** and used only as dots, tracks and fills - they clear 3:1 as graphical objects, not 4.5:1 as text. Never redeclare them per mode. |
+| Severity text | `critical-ink` / `high-ink` / `medium-ink`, per mode. Use these whenever the severity *word* is what is being coloured. |
 | Provenance | `prov-source` / `prov-ai` / `prov-suggest` / `prov-human`. Reserved for provenance. |
-| Brand | `brand`, `brand-strong`, `brand-soft`, `brand-ink`. Used for interaction and the active nav item only. |
-| Radius | `xs 3px` / `sm 5px` / `md 8px` / `lg 12px`. Controls get `sm`, containers get `md`. Nothing is pill-shaped. |
+| Brand | `brand`, `brand-strong`, `brand-soft`, `brand-ink`. Interaction and the active nav item only. Text sitting ON a brand fill uses `on-brand` — never `white`, which is 3.09:1 on the dark-mode cyan. |
+| Radius | `xs 2px` / `sm 4px` / `md 6px` / `lg 10px`. Controls get `sm`, containers get `md`. A schematic is drawn with a ruler; nothing is pill-shaped. |
 | Type | One family (`--font-sans`) plus `--font-mono` for IDs, offsets and locators. Base 14px, line-height 1.55. |
 | Numerals | Anything a reader compares column-wise carries `data-numeric` or lives in a `<table>` (both get `tabular-nums`). |
 
@@ -76,21 +83,25 @@ available as utility classes: `bg-surface`, `text-ink-muted`, `border-line`,
 | Graph edges | `--color-rel-*`, except `contradicts`, which uses `--color-critical` because it is the only edge that means a problem. |
 
 **Raw hex, raw px and raw rgba are not allowed anywhere under `src/` except
-`globals.css`.** This is enforced, not requested: `src/test/design-tokens.test.ts`
+`tokens.css`.** This is enforced, not requested: `src/test/design-tokens.test.ts`
 fails the build on a raw six-digit hex in any `.ts`/`.tsx` file and names the
 file and line. There is exactly one exemption, `src/app/layout.tsx`, because
 `<meta name="theme-color">` is read before any stylesheet is parsed and cannot
 reference a custom property — and that literal is itself asserted equal to
 `--color-canvas`.
 
-The same test asserts every text token clears AA on all five surfaces, that the
-soft-background pairs clear AA, that white-on-brand stays above 4.5, and that
-every `--color-class-*` and `--color-rel-*` clears 3:1 on `surface`. Add a
-colour and you add it to `globals.css` or the build stops.
+The same test asserts, **in both modes**, that every text token clears AA on
+all five surfaces, that the soft-background pairs clear AA, that `on-brand`
+clears AA on both brand fills, that the severity marks are never redeclared
+per mode, and that every `--color-class-*` and `--color-rel-*` clears 3:1 on
+`surface`. Add a colour and you add it to `tokens.css` or the build stops.
 
-Dark only, on purpose (`color-scheme: dark`). Do not add a light theme unless
-asked; if asked, it is a token-layer change in `globals.css`, not per-component
-conditionals.
+**Layer gotcha, learned twice.** Tailwind utilities live in
+`@layer utilities`, which beats `@layer components` no matter how specific
+your rule is. A rule that must override a utility - a theme override, a hover
+state on an element that carries `bg-*` - has to be **unlayered**. Both the
+light-mode block and the timeline quote highlight silently did nothing until
+they were moved out of a layer.
 
 ## 3. Component rules
 
@@ -192,7 +203,7 @@ Before you say a UI change is done:
    names a file, fix the file — do not add an exemption. The one existing
    exemption has a reason written next to it; a second one needs the same.
 6. Confirm the per-page JS bundle did not grow. This app ships 103 kB shared and
-   134 B – 3.01 kB per page. A new client component that pushes a page past
+   134 B – 3.49 kB per page. A new client component that pushes a page past
    ~5 kB needs a reason.
 7. Say in the summary what you changed, what you did not, and anything that
    needs a human decision.

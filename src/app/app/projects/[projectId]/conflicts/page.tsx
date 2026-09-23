@@ -50,11 +50,11 @@ export default async function ConflictsPage({
 
         <div className="grid gap-3 sm:grid-cols-4">
           {[
-            { label: "Open", value: open.length, tone: open.length ? "text-critical" : "text-positive" },
+            { label: "Open", value: open.length, tone: open.length ? "text-critical-ink" : "text-positive" },
             {
               label: "High or critical",
               value: open.filter((c) => c.severity === "high" || c.severity === "critical").length,
-              tone: "text-high",
+              tone: "text-high-ink",
             },
             { label: "Resolved", value: closed.length, tone: "text-positive" },
             { label: "Detectors run", value: 5, tone: "text-ink" },

@@ -51,7 +51,7 @@ export function EvidenceBlock({
                 {item.stakeholderRole ? `, ${item.stakeholderRole}` : ""}
               </span>
             ) : (
-              <span className="text-high">No attributable speaker</span>
+              <span className="text-high-ink">No attributable speaker</span>
             )}
             <span>{formatDate(item.capturedAt)}</span>
             <Ref className="ml-auto text-[10.5px]">
@@ -95,7 +95,7 @@ export function HighlightedStatement({
     parts.push(
       <mark
         key={span.id}
-        className="rounded-xs bg-high/20 px-0.5 text-high underline decoration-high/40 decoration-dotted underline-offset-2"
+        className="rounded-xs bg-high/20 px-0.5 text-high-ink underline decoration-high/40 decoration-dotted underline-offset-2"
       >
         {statement.slice(span.start, span.end)}
       </mark>,

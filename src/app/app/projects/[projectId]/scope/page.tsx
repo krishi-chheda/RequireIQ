@@ -60,9 +60,9 @@ export default async function ScopePage({
         <div className="grid gap-3 sm:grid-cols-4">
           {[
             ["Baseline scope", scope.baselineCount, "text-ink"],
-            ["Added since", scope.added.length, scope.added.length ? "text-high" : "text-positive"],
+            ["Added since", scope.added.length, scope.added.length ? "text-high-ink" : "text-positive"],
             ["Reworded by a reviewer", scope.changed.length, "text-brand-ink"],
-            ["Growth", `+${growth.toFixed(0)}%`, growth > 15 ? "text-critical" : "text-ink"],
+            ["Growth", `+${growth.toFixed(0)}%`, growth > 15 ? "text-critical-ink" : "text-ink"],
           ].map(([label, value, tone]) => (
             <div key={label as string} className="rounded-lg border border-line bg-surface px-4 py-3">
               <Eyebrow>{label as string}</Eyebrow>
@@ -89,7 +89,7 @@ export default async function ScopePage({
               </div>
               {scope.added.length > 0 ? (
                 <div
-                  className="flex items-center justify-center bg-high/25 text-[11.5px] font-medium text-high"
+                  className="flex items-center justify-center bg-high/25 text-[11.5px] font-medium text-high-ink"
                   style={{ width: `${(scope.added.length / Math.max(1, total)) * 100}%` }}
                 >
                   +{scope.added.length}

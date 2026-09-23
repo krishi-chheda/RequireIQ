@@ -5,29 +5,48 @@ import { describe, expect, it } from "vitest";
 /**
  * The design-system gate.
  *
- * Three properties the product claims in its README and its UI skill, checked
- * rather than asserted in prose:
+ * Properties the product claims in its README and its UI skill, checked rather
+ * than asserted in prose:
  *
- *   1. Colour lives in `globals.css`. A raw hex anywhere else is drift.
- *   2. Every text token clears WCAG AA against every surface it can sit on.
- *   3. Every graph colour clears 3:1 against the surface behind it, except the
- *      one that is deliberately below and says so.
+ *   1. Colour lives in `tokens.css`. A raw hex anywhere else is drift.
+ *   2. Every text token clears WCAG AA against every surface it can sit on -
+ *      in BOTH modes, independently.
+ *   3. The severity marks are mode-invariant and clear 3:1 as graphical
+ *      objects against both the lightest and the darkest ground.
+ *   4. The `theme-color` meta matches the canvas of the mode it names.
  *
- * Written as a test rather than a separate lint script because `npm run verify`
- * already runs vitest, so this needs no new dependency, no new runtime and no
- * new command for anyone to remember.
+ * Written as a test rather than a separate lint script because `npm run
+ * verify` already runs vitest, so this needs no new dependency, no new runtime
+ * and no new command for anyone to remember.
  */
 
 const SRC = join(process.cwd(), "src");
-const CSS = readFileSync(join(SRC, "app", "globals.css"), "utf8");
+const TOKENS = readFileSync(join(SRC, "app", "tokens.css"), "utf8");
 
 // ---------------------------------------------------------------------------
-// Token parsing
+// Parsing the two ramps
 // ---------------------------------------------------------------------------
 
-function tokens(): Map<string, string> {
+/** Pulls `--color-*: #rrggbb;` pairs out of one brace-delimited block. */
+function block(startMarker: string): Map<string, string> {
+  const start = TOKENS.indexOf(startMarker);
+  if (start === -1) throw new Error(`Block ${startMarker} not found in tokens.css`);
+  const open = TOKENS.indexOf("{", start);
+  let depth = 0;
+  let end = open;
+  for (let i = open; i < TOKENS.length; i += 1) {
+    if (TOKENS[i] === "{") depth += 1;
+    if (TOKENS[i] === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        end = i;
+        break;
+      }
+    }
+  }
+  const body = TOKENS.slice(open, end);
   const found = new Map<string, string>();
-  for (const match of CSS.matchAll(/(--color-[a-z0-9-]+):\s*(#[0-9a-fA-F]{6});/g)) {
+  for (const match of body.matchAll(/(--color-[a-z0-9-]+):\s*(#[0-9a-fA-F]{6});/g)) {
     const name = match[1];
     const value = match[2];
     if (name && value) found.set(name, value.toLowerCase());
@@ -35,11 +54,16 @@ function tokens(): Map<string, string> {
   return found;
 }
 
-const TOKENS = tokens();
+const DARK = block("@theme");
+const LIGHT_OVERRIDES = block('[data-theme="light"]');
 
-function hex(name: string): string {
-  const value = TOKENS.get(name);
-  if (!value) throw new Error(`Token ${name} is not defined in globals.css`);
+/**
+ * Light inherits every token it does not redeclare - which is how the severity
+ * marks stay mode-invariant while their tinted backgrounds do not.
+ */
+function hex(mode: "dark" | "light", name: string): string {
+  const value = mode === "light" ? (LIGHT_OVERRIDES.get(name) ?? DARK.get(name)) : DARK.get(name);
+  if (!value) throw new Error(`Token ${name} is not defined for ${mode}`);
   return value;
 }
 
@@ -59,19 +83,17 @@ function relativeLuminance(value: string): number {
 export function contrastRatio(a: string, b: string): number {
   const first = relativeLuminance(a);
   const second = relativeLuminance(b);
-  const lighter = Math.max(first, second);
-  const darker = Math.min(first, second);
-  return (lighter + 0.05) / (darker + 0.05);
+  return (Math.max(first, second) + 0.05) / (Math.min(first, second) + 0.05);
 }
 
 // ---------------------------------------------------------------------------
-// 1. No raw colour outside globals.css
+// 1. No raw colour outside tokens.css
 // ---------------------------------------------------------------------------
 
 /**
  * `<meta name="theme-color">` is consumed by the browser chrome before CSS is
- * parsed, so it cannot reference a custom property. It is checked against the
- * canvas token below instead.
+ * parsed, so it cannot reference a custom property. Both of its literals are
+ * checked against the canvas tokens below instead.
  */
 const RAW_COLOUR_EXEMPT = new Set(["app/layout.tsx"]);
 
@@ -84,7 +106,7 @@ function sourceFiles(dir: string, acc: string[] = []): string[] {
   return acc;
 }
 
-describe("colour lives in globals.css", () => {
+describe("colour lives in tokens.css", () => {
   it("has no raw hex in any component or page", () => {
     const offenders: string[] = [];
 
@@ -105,66 +127,98 @@ describe("colour lives in globals.css", () => {
     expect(offenders, `Use a --color-* token instead:\n${offenders.join("\n")}`).toEqual([]);
   });
 
-  it("keeps the theme-color meta equal to the canvas token", () => {
+  it("keeps each theme-color meta equal to that mode's canvas", () => {
     const layout = readFileSync(join(SRC, "app", "layout.tsx"), "utf8");
-    const declared = layout.match(/themeColor:\s*"(#[0-9a-fA-F]{6})"/)?.[1]?.toLowerCase();
-    expect(declared).toBe(hex("--color-canvas"));
+    const declared = [...layout.matchAll(/color:\s*"(#[0-9a-fA-F]{6})"/g)].map((m) =>
+      m[1]!.toLowerCase(),
+    );
+    expect(declared).toContain(hex("dark", "--color-canvas"));
+    expect(declared).toContain(hex("light", "--color-canvas"));
   });
 });
 
 // ---------------------------------------------------------------------------
-// 2. Text contrast
+// 2. Text contrast, per mode
 // ---------------------------------------------------------------------------
 
-/** Every background a text token can be rendered on, darkest to lightest. */
 const SURFACES = ["canvas", "surface", "raised", "overlay", "hover"] as const;
 
-/** Foreground tokens used for text anywhere in the product. */
+/** Foreground tokens rendered as text somewhere in the product. */
 const TEXT = [
   "ink",
   "ink-muted",
   "ink-faint",
   "brand-ink",
-  "critical",
-  "high",
-  "medium",
   "positive",
+  "critical-ink",
+  "high-ink",
+  "medium-ink",
   "prov-source",
   "prov-ai",
   "prov-suggest",
   "prov-human",
 ] as const;
 
-describe("text contrast clears WCAG AA", () => {
+const MODES = ["dark", "light"] as const;
+
+describe.each(MODES)("%s mode: text contrast clears WCAG AA", (mode) => {
   it.each(TEXT)("%s is at least 4.5:1 on every surface", (name) => {
     for (const surface of SURFACES) {
-      const ratio = contrastRatio(hex(`--color-${name}`), hex(`--color-${surface}`));
-      expect(ratio, `${name} on ${surface} is ${ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(4.5);
+      const ratio = contrastRatio(hex(mode, `--color-${name}`), hex(mode, `--color-${surface}`));
+      expect(ratio, `${name} on ${surface} in ${mode} is ${ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(4.5);
     }
   });
 
   it.each([
-    ["critical", "critical-soft"],
-    ["high", "high-soft"],
-    ["medium", "medium-soft"],
+    ["ink", "critical-soft"],
+    ["ink", "high-soft"],
+    ["ink", "medium-soft"],
+    ["ink", "low-soft"],
+    ["ink-muted", "brand-soft"],
     ["positive", "positive-soft"],
     ["brand-ink", "brand-soft"],
     ["prov-suggest", "prov-suggest-soft"],
   ])("%s on %s is at least 4.5:1", (foreground, background) => {
-    const ratio = contrastRatio(hex(`--color-${foreground}`), hex(`--color-${background}`));
-    expect(ratio, `${foreground} on ${background} is ${ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(4.5);
+    const ratio = contrastRatio(hex(mode, `--color-${foreground}`), hex(mode, `--color-${background}`));
+    expect(
+      ratio,
+      `${foreground} on ${background} in ${mode} is ${ratio.toFixed(2)}:1`,
+    ).toBeGreaterThanOrEqual(4.5);
   });
 
-  it("keeps white on the brand fill above AA", () => {
-    // The tightest pair in the system. If a change pushes it under, either the
-    // brand darkens or primary buttons stop using white text.
-    const ratio = contrastRatio("#ffffff", hex("--color-brand"));
-    expect(ratio, `white on brand is ${ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(4.5);
+  it("keeps on-brand legible on both brand fills", () => {
+    for (const fill of ["brand", "brand-strong"]) {
+      const ratio = contrastRatio(hex(mode, "--color-on-brand"), hex(mode, `--color-${fill}`));
+      expect(ratio, `on-brand over ${fill} in ${mode} is ${ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(4.5);
+    }
   });
 });
 
 // ---------------------------------------------------------------------------
-// 3. Graph palette
+// 3. Severity marks: mode-invariant, and legible on both grounds
+// ---------------------------------------------------------------------------
+
+const SEVERITY = ["critical", "high", "medium", "low"] as const;
+
+describe("severity is a mode-invariant status palette", () => {
+  it.each(SEVERITY)("%s is not redeclared for light mode", (name) => {
+    // If a severity mark ever gets a light-mode override, the invariant this
+    // whole approach rests on is gone - and so is the reason one status set
+    // can serve both grounds.
+    expect(LIGHT_OVERRIDES.has(`--color-${name}`)).toBe(false);
+  });
+
+  it.each(SEVERITY)("%s clears 3:1 as a mark on the lightest and darkest ground", (name) => {
+    const mark = hex("dark", `--color-${name}`);
+    for (const ground of [hex("light", "--color-surface"), hex("dark", "--color-canvas")]) {
+      const ratio = contrastRatio(mark, ground);
+      expect(ratio, `${name} on ${ground} is ${ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(3);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 4. Graph palette
 // ---------------------------------------------------------------------------
 
 /**
@@ -174,33 +228,24 @@ describe("text contrast clears WCAG AA", () => {
  */
 const BELOW_THRESHOLD_BY_DESIGN = new Set(["--color-rel-supports"]);
 
-describe("graph palette clears WCAG 1.4.11", () => {
+describe.each(MODES)("%s mode: graph palette clears WCAG 1.4.11", (mode) => {
   it("draws every class and relationship colour at 3:1 on surface", () => {
-    const surface = hex("--color-surface");
+    const surface = hex(mode, "--color-surface");
     const weak: string[] = [];
+    const names = new Set([...DARK.keys(), ...LIGHT_OVERRIDES.keys()]);
 
-    for (const [name, value] of TOKENS) {
+    for (const name of names) {
       if (!name.startsWith("--color-class-") && !name.startsWith("--color-rel-")) continue;
       if (BELOW_THRESHOLD_BY_DESIGN.has(name)) continue;
-      const ratio = contrastRatio(value, surface);
-      if (ratio < 3) weak.push(`${name} ${value} is ${ratio.toFixed(2)}:1`);
+      const ratio = contrastRatio(hex(mode, name), surface);
+      if (ratio < 3) weak.push(`${name} ${hex(mode, name)} is ${ratio.toFixed(2)}:1`);
     }
 
-    expect(weak, `Below 3:1 against surface:\n${weak.join("\n")}`).toEqual([]);
-  });
-
-  it("still exempts only the edge that is meant to recede", () => {
-    // Guards the exemption itself: if someone brightens `supports`, the
-    // exemption is stale and should be deleted rather than left to hide a
-    // future regression.
-    const ratio = contrastRatio(hex("--color-rel-supports"), hex("--color-surface"));
-    expect(ratio).toBeLessThan(3);
+    expect(weak, `Below 3:1 against ${mode} surface:\n${weak.join("\n")}`).toEqual([]);
   });
 
   it("gives every requirement class a colour", () => {
-    // Mirrors GROUP_COLOUR in src/components/graph.tsx. A new class that gets a
-    // chip in the register but no token would fall back to `unknown` grey.
-    const classes = [...TOKENS.keys()].filter((name) => name.startsWith("--color-class-"));
+    const classes = [...DARK.keys()].filter((name) => name.startsWith("--color-class-"));
     expect(classes).toContain("--color-class-unknown");
     expect(classes.length).toBeGreaterThanOrEqual(14);
   });

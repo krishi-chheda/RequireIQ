@@ -29,7 +29,7 @@ export default function ProjectSectionError({
     <main id="main" className="mx-auto w-full max-w-7xl px-5 py-8 sm:px-8">
       <div className="space-y-4">
         <div className="space-y-2 border-b border-line pb-5">
-          <p className="font-mono text-[11px] uppercase tracking-[0.13em] text-critical">Section failed</p>
+          <p className="font-mono text-[11px] uppercase tracking-[0.13em] text-critical-ink">Section failed</p>
           <h1 className="text-[20px] font-semibold tracking-[-0.02em] text-ink">
             This section could not be rendered
           </h1>

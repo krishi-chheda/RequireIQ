@@ -53,9 +53,9 @@ export default async function TraceabilityPage({
         <div className="grid gap-3 sm:grid-cols-4">
           {[
             ["Requirements", rows.length, "text-ink"],
-            ["Traced to a source", traced, traced === rows.length ? "text-positive" : "text-high"],
-            ["Attributed to a person", attributed, attributed === rows.length ? "text-positive" : "text-high"],
-            ["Involved in a conflict", rows.filter((r) => r.conflictRefs.length > 0).length, "text-high"],
+            ["Traced to a source", traced, traced === rows.length ? "text-positive" : "text-high-ink"],
+            ["Attributed to a person", attributed, attributed === rows.length ? "text-positive" : "text-high-ink"],
+            ["Involved in a conflict", rows.filter((r) => r.conflictRefs.length > 0).length, "text-high-ink"],
           ].map(([label, value, tone]) => (
             <div key={label as string} className="rounded-lg border border-line bg-surface px-4 py-3">
               <Eyebrow>{label as string}</Eyebrow>
@@ -103,7 +103,7 @@ export default async function TraceabilityPage({
                           &ldquo;{evidence.quote}&rdquo;
                         </p>
                       ) : (
-                        <span className="text-[11.5px] text-critical">No source recorded</span>
+                        <span className="text-[11.5px] text-critical-ink">No source recorded</span>
                       )}
                     </Td>
                     <Td>

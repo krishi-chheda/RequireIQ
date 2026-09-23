@@ -127,7 +127,7 @@ export function UploadPanel({ projectId }: { projectId: string }) {
                 : "border-critical/30 bg-critical-soft",
             )}
           >
-            <p className={cx("text-[12.5px] font-medium", error.unsupported ? "text-medium" : "text-critical")}>
+            <p className={cx("text-[12.5px] font-medium", error.unsupported ? "text-medium-ink" : "text-critical-ink")}>
               {error.unsupported ? "Format not supported in this build" : "Ingestion failed"}
             </p>
             <p className="mt-1 text-[12px] leading-relaxed text-ink-muted">{error.message}</p>

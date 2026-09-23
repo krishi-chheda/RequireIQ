@@ -55,7 +55,7 @@ export default async function ExportsPage({
                   <a
                     href={`${api}/${report.id}?format=csv`}
                     download
-                    className="inline-flex items-center gap-1.5 rounded-sm bg-brand px-3 py-1.5 text-[12.5px] font-medium text-white transition-colors hover:bg-brand-strong"
+                    className="inline-flex items-center gap-1.5 rounded-sm bg-brand px-3 py-1.5 text-[12.5px] font-medium text-on-brand transition-colors hover:bg-brand-strong"
                   >
                     Download CSV
                   </a>

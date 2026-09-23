@@ -40,6 +40,8 @@ import {
   type FlowStage,
 } from "@/components/landing-visuals";
 import { ConflictDemo } from "@/components/conflict-demo";
+import { ThemeToggle } from "@/components/theme-toggle";
+import { RequirementTypeExplorer, type TypeDatum } from "@/components/type-explorer";
 
 export const metadata: Metadata = {
   title: "RequireIQ - Find the requirements your project cannot afford to miss",
@@ -103,6 +105,22 @@ export default function LandingPage() {
     (r) => r.type,
     (k) => REQUIREMENT_TYPE_LABEL[k as RequirementType] ?? k,
   );
+
+  /**
+   * Three real statements per class, for the explorer below the bars.
+   *
+   * Sliced here rather than fetched on click: the whole payload is a few
+   * hundred bytes and it means selecting a class cannot show a spinner. The
+   * shortest statements are chosen so the panel does not jump in height.
+   */
+  const typeData: TypeDatum[] = typeBars.map((bar) => ({
+    ...bar,
+    samples: requirements
+      .filter((r) => (REQUIREMENT_TYPE_LABEL[r.type] ?? r.type) === bar.label)
+      .sort((a, b) => a.statement.length - b.statement.length)
+      .slice(0, 3)
+      .map((r) => ({ ref: r.ref, statement: r.statement })),
+  }));
   const findingBars = tally(
     findings,
     (f) => f.kind,
@@ -194,7 +212,8 @@ export default function LandingPage() {
       <header className="sticky top-0 z-20 border-b border-line bg-canvas/85 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-3.5 sm:px-8">
           <Wordmark />
-          <nav className="flex items-center gap-2" aria-label="Primary">
+          <nav className="flex items-center gap-2.5" aria-label="Primary">
+            <ThemeToggle className="mr-1" />
             <a href="#how" className={buttonClass("ghost", "hidden sm:inline-flex")}>
               How it works
             </a>
@@ -258,11 +277,13 @@ export default function LandingPage() {
                 </h2>
                 {/* The argument as a picture before it is made in words: two
                     marks on one axis, eleven weeks of nothing between them. */}
-                <div className="mt-6">
+                {/* One container so `:has()` can pair a mark with its quote. */}
+                <div data-linked-marks className="mt-6">
                   <ConflictTimeline
                     spanLabel="11 weeks apart · never read together"
                     marks={[
                       {
+                        id: "b",
                         at: 0.12,
                         date: "19 June",
                         source: "Finance email",
@@ -270,6 +291,7 @@ export default function LandingPage() {
                         tone: "high",
                       },
                       {
+                        id: "a",
                         at: 0.88,
                         date: "9 July",
                         source: "Workshop 07 transcript",
@@ -283,12 +305,15 @@ export default function LandingPage() {
                       are the marks on that axis.
                     </p>
                   </ConflictTimeline>
-                </div>
 
                 {/* Side by side, because that is the entire argument: neither
-                    author saw the other, and no keyword search connects them. */}
+                    author saw the other, and no keyword search connects them.
+                    `data-mark` pairs each quote with its mark on the axis. */}
                 <div className="mt-3 grid gap-3 lg:grid-cols-2">
-                  <blockquote className="rounded-md border-l-2 border-brand bg-raised px-4 py-3">
+                  <blockquote
+                    data-mark="a"
+                    className="rounded-md border-l-2 border-brand bg-raised px-4 py-3 transition-colors"
+                  >
                     <p className="text-[13.5px] leading-relaxed text-ink">
                       &ldquo;The platform must support 10,000 concurrent users during the Monday morning
                       peak.&rdquo;
@@ -297,7 +322,10 @@ export default function LandingPage() {
                       Workshop 07 transcript, Platform Engineering Lead &middot; 9 July
                     </footer>
                   </blockquote>
-                  <blockquote className="rounded-md border-l-2 border-high bg-raised px-4 py-3">
+                  <blockquote
+                    data-mark="b"
+                    className="rounded-md border-l-2 border-high bg-raised px-4 py-3 transition-colors"
+                  >
                     <p className="text-[13.5px] leading-relaxed text-ink">
                       &ldquo;Infrastructure spend for the onboarding platform must not exceed $200,000 in the
                       first twelve months of operation.&rdquo;
@@ -306,6 +334,7 @@ export default function LandingPage() {
                       Finance email, Finance Business Partner &middot; 19 June
                     </footer>
                   </blockquote>
+                </div>
                 </div>
                 <p className="mt-6 max-w-3xl text-[13.5px] leading-relaxed text-ink-muted">
                   Both are reasonable. Neither author saw the other. They share no vocabulary, so no keyword
@@ -353,7 +382,9 @@ export default function LandingPage() {
                 </p>
                 {/* One hue for every bar: the category is the axis label, so
                     spending colour on it too would encode length twice. */}
-                <BarRows className="mt-4" data={typeBars} unit="requirements" />
+                <div className="mt-4">
+                  <RequirementTypeExplorer data={typeData} />
+                </div>
               </div>
 
               <div className="bg-surface p-5">

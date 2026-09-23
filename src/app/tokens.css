@@ -1,0 +1,240 @@
+/* ---------------------------------------------------------------------------
+   RequireIQ design tokens - technical schematic, two modes.
+
+   A drafting/CAD language: a blue-slate or paper ground under a faint plotted
+   grid, hairline rules instead of shadows, cyan as the instrument colour, and
+   marks that read as plotted rather than drawn.
+
+   HOW THE TWO MODES WORK
+   ----------------------
+   `@theme` carries the DARK values and is the default. Light is applied by
+   re-declaring the same custom properties under a selector. Component code
+   never changes: every utility in the app compiles to `var(--color-*)`, so a
+   token swap is the whole mechanism.
+
+   Dark is the `@theme` default on purpose. Tailwind compiles an opacity
+   modifier twice - a baked hex first, then a `var()`-based `color-mix` inside
+   `@supports (color: color-mix(...))`. Current browsers take the second and
+   follow a live theme switch; a pre-2023 browser takes the baked hex, which is
+   frozen to whatever `@theme` declares. Pinning that to dark means the legacy
+   fallback matches the default mode rather than contradicting it.
+
+   CONTRAST
+   --------
+   Every text token clears WCAG AA (4.5:1) against all five surfaces of its own
+   mode. `src/test/design-tokens.test.ts` asserts this for both modes and fails
+   the build if either ramp regresses. Do not add a colour here without adding
+   it to that test.
+--------------------------------------------------------------------------- */
+
+@theme {
+  /* --- Surfaces, darkest to lightest -------------------------------------- */
+  --color-canvas: #080d13;
+  --color-surface: #0e1621;
+  --color-raised: #152030;
+  --color-overlay: #1b2938;
+  --color-hover: #223345;
+
+  /* The plotted grid. Texture only - it carries no information, so it has no
+     contrast minimum and must never be the only thing marking a boundary. */
+  --color-grid: #131f2b;
+
+  /* --- Hairlines. `line` is the default; `edge` is for emphasis. ----------- */
+  --color-line: #1b2735;
+  --color-edge: #2a3b4e;
+
+  /* --- Text, descending prominence ---------------------------------------- */
+  /* min 11.07 / 6.24 / 4.65 against the five surfaces above. `ink-faint`
+     carries citations, offsets and timestamps - the text a reader has to be
+     able to check - so it is held to the same AA bar as body copy. */
+  --color-ink: #e9eef5;
+  --color-ink-muted: #a6b6c9;
+  --color-ink-faint: #8a9db4;
+
+  /* --- Brand: the instrument colour --------------------------------------- */
+  /* `on-brand` is the text that sits ON a brand fill. In dark mode the cyan is
+     too bright for white (3.09), so the fill takes near-black text instead -
+     which is also the more instrument-like treatment. */
+  --color-brand: #1b9fc4;
+  --color-brand-strong: #38b4d4;
+  --color-brand-soft: #0d2430;
+  --color-brand-ink: #5cc6e8;
+  --color-on-brand: #04212b;
+
+  /* --- Severity: a STATUS palette, and mode-invariant ---------------------- */
+  /* These four are identical in both modes, which is only possible because
+     they are used as MARKS - the dot and the track - and never as text. As a
+     graphical object a mark needs 3:1, and each of these clears 3:1 against
+     both #ffffff and #080d13. The severity WORD renders in `ink`.
+
+     A status palette is a fixed reserved scale; its accessibility channel is
+     the label beside it, not hue distance. Red, amber and orange sit close
+     together here as they do in every such palette, so never encode severity
+     as adjacent colour fills and never drop the word. */
+  --color-critical: #d93a3a;
+  --color-high: #c2690a;
+  --color-medium: #a8840c;
+  --color-low: #78889b;
+
+  /* Severity used as TEXT needs 4.5:1, which the mode-invariant marks above
+     cannot give on both grounds. These are the per-mode text steps; the marks
+     stay invariant. Use `-ink` whenever the severity word is the thing being
+     coloured, and the plain token for dots, tracks and fills. */
+  --color-critical-ink: #ff6b6b;
+  --color-high-ink: #ffa94d;
+  --color-medium-ink: #ffd43b;
+
+  --color-critical-soft: #2a1215;
+  --color-high-soft: #241706;
+  --color-medium-soft: #221c06;
+  --color-low-soft: #151b22;
+
+  /* --- Outcomes ------------------------------------------------------------ */
+  --color-positive: #51cf9a;
+  --color-positive-soft: #0a2019;
+  --color-caution: #a8840c;
+
+  /* --- Provenance ---------------------------------------------------------- */
+  /* The product's most important visual language: whether the reader is
+     looking at a fact, a reading, or a proposal. Rendered as text, so these
+     are per-mode and held to 4.5:1. */
+  --color-prov-source: #96a7bb;
+  --color-prov-ai: #74c0fc;
+  --color-prov-suggest: #b197fc;
+  --color-prov-human: #51cf9a;
+  --color-prov-suggest-soft: #1a1430;
+
+  /* --- Requirement class, for the relationship graph ----------------------- */
+  /* Categorical, and deliberately separate from severity and provenance even
+     where a value coincides: a class is not a severity.
+
+     The eight classes actually present in a register are validated as a
+     categorical set in BOTH modes - lightness band, chroma floor, adjacent
+     CVD separation, normal-vision floor and 3:1 on surface all pass. The
+     remaining names are constraint classes and reuse a validated step. Re-step
+     with the palette validator before changing any of them. */
+  --color-class-functional: #3f8fe8;
+  --color-class-non-functional: #8a9db4;
+  --color-class-performance: #d07e1f;
+  --color-class-security: #dc4747;
+  --color-class-compliance: #9a7ce8;
+  --color-class-operational: #2fa87a;
+  --color-class-technical: #2f9fb5;
+  --color-class-business: #a9861a;
+  --color-class-ux: #c65c98;
+  --color-class-budget: #a9861a;
+  --color-class-timeline: #d07e1f;
+  --color-class-regulatory: #9a7ce8;
+  --color-class-organisational: #8a9db4;
+  --color-class-unknown: #8a9db4;
+
+  /* --- Relationship kind, for graph edges ---------------------------------- */
+  /* `contradicts` uses the severity ramp because it is the only edge that
+     represents a problem. `supports` is deliberately faint: it is the most
+     common edge by far and drawing it at strength turns the picture to noise.
+     The graph is `aria-hidden` and every edge is also a row in the
+     relationship table, so nothing depends on reading it. */
+  --color-rel-duplicates: #9a7ce8;
+  --color-rel-depends: #3f8fe8;
+  --color-rel-supports: #2c3d4f;
+  --color-rel-impacts: #8a9db4;
+
+  /* The modal scrim. Dark in both modes - see the note in globals.css. */
+  --color-scrim: rgb(4 5 7 / 0.72);
+
+  /* --- Type ---------------------------------------------------------------- */
+  --font-sans: ui-sans-serif, system-ui, "Segoe UI Variable Text", "Segoe UI",
+    -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+
+  /* --- Radius. A schematic is drawn with a ruler; nothing is pill-shaped. --- */
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+}
+
+/* ---------------------------------------------------------------------------
+   LIGHT - drafting paper.
+
+   The surface ramp is deliberately shallow. An earlier attempt ran the darkest
+   step to #d8e3ed and eight text tokens fell below AA against it; keeping the
+   darkest light surface near paper is what lets one ink ramp serve all five.
+--------------------------------------------------------------------------- */
+
+/* Applied by the inline script in the root layout, which resolves the stored
+   choice or the system preference to an explicit `data-theme` before first
+   paint. Driving it from one attribute keeps the light values in a single
+   block; the cost is that a reader with JavaScript disabled always gets dark,
+   which degrades to the default rather than to anything broken.
+
+   This block is deliberately UNLAYERED. Tailwind emits `@theme` into
+   `@layer theme`, and unlayered rules beat every layered one regardless of
+   specificity, so these win without an `!important` anywhere. */
+:root[data-theme="light"] {
+  --color-canvas: #f5f7fa;
+  --color-surface: #ffffff;
+  --color-raised: #f1f5f9;
+  --color-overlay: #e9eff5;
+  --color-hover: #e0e8f0;
+
+  --color-grid: #dfe7ef;
+
+  --color-line: #dde5ee;
+  --color-edge: #bcccdb;
+
+  /* min 14.62 / 6.81 / 4.96 */
+  --color-ink: #0d1720;
+  --color-ink-muted: #3c4f63;
+  --color-ink-faint: #4e6479;
+
+  /* White on this cyan is 5.37, so light mode keeps white on the fill. */
+  --color-brand: #0a7490;
+  --color-brand-strong: #085d74;
+  --color-brand-soft: #e0f2f8;
+  --color-brand-ink: #0a5f7a;
+  --color-on-brand: #ffffff;
+
+  /* Severity is mode-invariant - the four marks above are NOT redeclared.
+     Only their tinted backgrounds change. */
+  --color-critical-ink: #b02121;
+  --color-high-ink: #8f4005;
+  --color-medium-ink: #6f4e00;
+
+  --color-critical-soft: #fdeaea;
+  --color-high-soft: #fdf0e0;
+  --color-medium-soft: #faf3dd;
+  --color-low-soft: #eef2f6;
+
+  --color-positive: #0b6444;
+  --color-positive-soft: #e3f5ed;
+  --color-caution: #7a5f00;
+
+  --color-prov-source: #4e6479;
+  --color-prov-ai: #15558f;
+  --color-prov-suggest: #5835b8;
+  --color-prov-human: #0b6444;
+  --color-prov-suggest-soft: #eee9fb;
+
+  --color-class-functional: #1b6fc9;
+  --color-class-non-functional: #4e6479;
+  --color-class-performance: #9a5205;
+  --color-class-security: #b02525;
+  --color-class-compliance: #6741d9;
+  --color-class-operational: #0f7a54;
+  --color-class-technical: #007a99;
+  --color-class-business: #8a6100;
+  --color-class-ux: #a52a7a;
+  --color-class-budget: #8a6100;
+  --color-class-timeline: #9a5205;
+  --color-class-regulatory: #6741d9;
+  --color-class-organisational: #4e6479;
+  --color-class-unknown: #4e6479;
+
+  --color-scrim: rgb(9 17 25 / 0.45);
+
+  --color-rel-duplicates: #6741d9;
+  --color-rel-depends: #1b6fc9;
+  --color-rel-supports: #c3d0dd;
+  --color-rel-impacts: #4e6479;
+}

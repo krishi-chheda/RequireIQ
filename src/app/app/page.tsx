@@ -206,7 +206,7 @@ export default function OverviewPage() {
                             href={`/app/projects/${summary.project.id}/${metric.href}`}
                             data-numeric
                             className={`text-[19px] font-semibold tracking-[-0.02em] hover:underline ${
-                              metric.alert ? "text-critical" : "text-ink"
+                              metric.alert ? "text-critical-ink" : "text-ink"
                             }`}
                           >
                             {formatNumber(metric.value)}

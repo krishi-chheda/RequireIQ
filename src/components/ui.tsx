@@ -122,10 +122,14 @@ export function Badge({
     neutral: "border-edge bg-overlay text-ink-muted",
     brand: "border-brand/35 bg-brand-soft text-brand-ink",
     positive: "border-positive/30 bg-positive-soft text-positive",
-    critical: "border-critical/35 bg-critical-soft text-critical",
-    high: "border-high/35 bg-high-soft text-high",
-    medium: "border-medium/35 bg-medium-soft text-medium",
-    low: "border-edge bg-low-soft text-ink-faint",
+    /* Severity tones carry the word in `ink`, not in the severity colour.
+       The status set is mode-invariant and is only guaranteed legible as a
+       MARK (3:1) rather than as text (4.5:1); the dot and the tint carry the
+       colour, the word carries the meaning. */
+    critical: "border-critical/35 bg-critical-soft text-ink",
+    high: "border-high/35 bg-high-soft text-ink",
+    medium: "border-medium/35 bg-medium-soft text-ink",
+    low: "border-edge bg-low-soft text-ink-muted",
   };
   return (
     <span
@@ -266,8 +270,8 @@ export function Stat({
 }) {
   const accent: Record<string, string> = {
     neutral: "text-ink",
-    critical: "text-critical",
-    high: "text-high",
+    critical: "text-critical-ink",
+    high: "text-high-ink",
     positive: "text-positive",
     brand: "text-brand-ink",
   };
@@ -414,10 +418,10 @@ const BUTTON_BASE =
   "inline-flex items-center justify-center gap-1.5 rounded-sm px-3 py-1.5 text-[12.5px] font-medium transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-45";
 
 export const BUTTON_VARIANTS: Record<string, string> = {
-  primary: "bg-brand text-white hover:bg-brand-strong",
+  primary: "bg-brand text-on-brand hover:bg-brand-strong",
   secondary: "border border-edge bg-overlay text-ink hover:border-ink-faint hover:bg-hover",
   ghost: "text-ink-muted hover:bg-overlay hover:text-ink",
-  danger: "border border-critical/40 bg-critical-soft text-critical hover:bg-critical/15",
+  danger: "border border-critical/40 bg-critical-soft text-critical-ink hover:bg-critical/15",
   positive: "border border-positive/40 bg-positive-soft text-positive hover:bg-positive/15",
 };
 

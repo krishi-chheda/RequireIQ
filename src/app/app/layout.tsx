@@ -5,6 +5,7 @@ import { isEphemeral } from "@/lib/db";
 import { getProviderStatus } from "@/lib/ai";
 import { Wordmark } from "@/components/brand";
 import { Badge } from "@/components/ui";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 /**
  * Workspace chrome.
@@ -37,6 +38,10 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           </div>
 
           <div className="flex items-center gap-3">
+            {/* Also here, not only on the landing page: a reader who switches
+                to light and then opens the workspace must be able to switch
+                back from where they are. */}
+            <ThemeToggle />
             <Badge
               tone={provider.deterministic ? "neutral" : "brand"}
               title={provider.description}
@@ -60,7 +65,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       {isEphemeral() ? (
         <p
           role="status"
-          className="border-b border-medium/25 bg-medium-soft px-5 py-2 text-center text-[12px] text-medium"
+          className="border-b border-medium/25 bg-medium-soft px-5 py-2 text-center text-[12px] text-medium-ink"
         >
           Hosted demo &middot; every instance re-analyses the corpus from source, so review decisions and
           uploads last only for this session. Run it locally for durable writes.

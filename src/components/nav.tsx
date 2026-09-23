@@ -119,7 +119,7 @@ function NavLink({ item, onNavigate }: { item: NavItem; onNavigate: () => void }
             data-numeric
             className={cx(
               "shrink-0 rounded-xs px-1.5 py-px text-[10.5px] font-medium tabular-nums",
-              item.alert ? "bg-critical-soft text-critical" : "bg-overlay text-ink-faint",
+              item.alert ? "bg-critical-soft text-critical-ink" : "bg-overlay text-ink-faint",
             )}
           >
             {item.count}

@@ -64,7 +64,7 @@ export function ActionMessage({ state }: { state: ActionResult | null }) {
         "mt-2 rounded-sm border px-3 py-2 text-[12px]",
         state.ok
           ? "border-positive/30 bg-positive-soft text-positive"
-          : "border-critical/30 bg-critical-soft text-critical",
+          : "border-critical/30 bg-critical-soft text-critical-ink",
       )}
     >
       {state.message}

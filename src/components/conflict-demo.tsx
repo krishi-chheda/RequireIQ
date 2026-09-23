@@ -45,9 +45,9 @@ function verdict(ratio: number): { tone: "positive" | "medium" | "high" | "criti
 
 const TONE: Record<string, { border: string; bg: string; text: string }> = {
   positive: { border: "border-positive/25", bg: "bg-positive-soft/50", text: "text-positive" },
-  medium: { border: "border-medium/25", bg: "bg-medium-soft/50", text: "text-medium" },
-  high: { border: "border-high/25", bg: "bg-high-soft/50", text: "text-high" },
-  critical: { border: "border-critical/25", bg: "bg-critical-soft/50", text: "text-critical" },
+  medium: { border: "border-medium/25", bg: "bg-medium-soft/50", text: "text-medium-ink" },
+  high: { border: "border-high/25", bg: "bg-high-soft/50", text: "text-high-ink" },
+  critical: { border: "border-critical/25", bg: "bg-critical-soft/50", text: "text-critical-ink" },
 };
 
 export function ConflictDemo() {

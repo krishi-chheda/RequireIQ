@@ -92,9 +92,9 @@ const SEVERITY_FILL: Record<string, string> = {
 };
 
 const SEVERITY_INK: Record<string, string> = {
-  critical: "text-critical",
-  high: "text-high",
-  medium: "text-medium",
+  critical: "text-critical-ink",
+  high: "text-high-ink",
+  medium: "text-medium-ink",
   low: "text-ink-faint",
 };
 
@@ -192,6 +192,8 @@ export function PipelineFlow({ stages }: { stages: FlowStage[] }) {
 // ---------------------------------------------------------------------------
 
 export interface TimelineMark {
+  /** Links this mark to the quote that carries the same `data-mark`. */
+  id: string;
   /** 0-1 along the axis. */
   at: number;
   date: string;
@@ -207,6 +209,11 @@ export interface TimelineMark {
  * apart, in different documents, with the span between them labelled. The
  * drawing is `aria-hidden` and the same facts are in the list beside it, so the
  * diagram never becomes the only way to get the information.
+ *
+ * Each mark carries a `data-mark` that a quote below shares. The pairing is
+ * wired in CSS with `:has()` - hovering either one lights both - so there is
+ * no state, no JavaScript, and nothing focusable inside the hidden SVG. It is
+ * a mouse affordance layered on content that is already complete without it.
  */
 export function ConflictTimeline({
   marks,
@@ -247,7 +254,17 @@ export function ConflictTimeline({
         {marks.map((mark) => {
           const x = 24 + mark.at * 592;
           return (
-            <g key={mark.source}>
+            <g key={mark.id} data-mark={mark.id}>
+              {/* Halo, revealed when this mark or its quote is hovered. */}
+              <circle
+                cx={x}
+                cy="96"
+                r="9"
+                fill="none"
+                stroke={stroke[mark.tone]}
+                strokeWidth="1"
+                className="mark-halo"
+              />
               <line x1={x} y1="40" x2={x} y2="96" stroke={stroke[mark.tone]} strokeWidth="1.5" />
               <circle cx={x} cy="96" r="4" fill={stroke[mark.tone]} />
               <text
@@ -320,7 +337,7 @@ export function AnnotatedStatement({
         {/* No horizontal padding: the highlight has to hug the span exactly,
             or the punctuation that follows it is pushed off and the sentence
             renders as "immediately ." */}
-        <mark className="rounded-xs bg-medium-soft font-medium text-medium">{span}</mark>
+        <mark className="rounded-xs bg-medium-soft font-medium text-medium-ink">{span}</mark>
         {after}
       </p>
       <p className="mt-3 border-t border-line pt-3 text-[11.5px] leading-relaxed text-ink-faint">{note}</p>
@@ -372,7 +389,7 @@ export function CoverageGrid({ flagged, total }: { flagged: string[]; total: num
           <li key={area} className="flex items-start gap-2">
             <span aria-hidden className="mt-1.5 size-1.5 shrink-0 rounded-full bg-high" />
             <span className="text-[12px] leading-relaxed text-ink-muted">{area}</span>
-            <span className="ml-auto shrink-0 text-[10.5px] uppercase tracking-[0.08em] text-high">
+            <span className="ml-auto shrink-0 text-[10.5px] uppercase tracking-[0.08em] text-high-ink">
               Unspecified
             </span>
           </li>

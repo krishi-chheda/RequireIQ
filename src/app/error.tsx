@@ -24,7 +24,7 @@ export default function GlobalError({
   return (
     <main id="main" className="flex min-h-screen flex-col items-center justify-center gap-5 px-6 text-center">
       <div>
-        <p className="font-mono text-[12px] uppercase tracking-[0.13em] text-critical">Something went wrong</p>
+        <p className="font-mono text-[12px] uppercase tracking-[0.13em] text-critical-ink">Something went wrong</p>
         <h1 className="mt-2 text-[22px] font-semibold tracking-[-0.02em] text-ink">
           This screen could not be rendered
         </h1>

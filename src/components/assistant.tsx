@@ -106,7 +106,7 @@ export function ProjectAssistant({ projectId }: { projectId: string }) {
 
             {exchange.error ? (
               <div role="alert" className="rounded-lg border border-critical/30 bg-critical-soft px-4 py-3">
-                <p className="text-[12.5px] text-critical">{exchange.error}</p>
+                <p className="text-[12.5px] text-critical-ink">{exchange.error}</p>
               </div>
             ) : exchange.answer ? (
               <AnswerCard answer={exchange.answer} projectId={projectId} />

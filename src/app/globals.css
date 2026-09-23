@@ -1,110 +1,5 @@
 @import "tailwindcss";
-
-/* ---------------------------------------------------------------------------
-   RequireIQ design tokens.
-
-   A single dark, low-chroma surface stack with one saturated brand blue and a
-   strictly ordered severity ramp. The restraint is functional: in a tool whose
-   job is to make a reviewer notice one red number on a page of grey ones,
-   colour has to mean something, so nothing decorative is allowed to use it.
---------------------------------------------------------------------------- */
-
-@theme {
-  /* Surfaces, darkest to lightest. */
-  --color-canvas: #08090b;
-  --color-surface: #0e1014;
-  --color-raised: #14171d;
-  --color-overlay: #1a1e26;
-  --color-hover: #1e232c;
-
-  /* Hairlines. `line` is the default; `edge` is for emphasis. */
-  --color-line: #1f242d;
-  --color-edge: #2b313c;
-
-  /* Text, in descending prominence.
-
-     All three clear WCAG AA (4.5:1) against every surface in the stack above,
-     including the lightest one. The faint step is the constraint: it carries
-     citations, locators and timestamps - exactly the text a reader has to be
-     able to check - so it is not allowed to be decorative grey. */
-  --color-ink: #eceef2;
-  --color-ink-muted: #a8b1c0;
-  --color-ink-faint: #8b94a5;
-
-  /* Brand. */
-  --color-brand: #2f6fed;
-  --color-brand-strong: #1d4ed8;
-  --color-brand-soft: #0f1d3d;
-  --color-brand-ink: #93b4fb;
-
-  /* Severity ramp. Ordered, and used only for severity. */
-  --color-critical: #f2555a;
-  --color-critical-soft: #2a1114;
-  --color-high: #f08c3a;
-  --color-high-soft: #26170a;
-  --color-medium: #d9b02c;
-  --color-medium-soft: #221c08;
-  --color-low: #8b94a5;
-  --color-low-soft: #16181d;
-
-  /* Outcomes. */
-  --color-positive: #35b87d;
-  --color-positive-soft: #0b2018;
-  --color-caution: #d9b02c;
-
-  /* Provenance. The product's most important visual language: these four tell
-     the reader whether they are looking at a fact, a reading, or a proposal. */
-  --color-prov-source: #8b95a6;
-  --color-prov-ai: #6f93f5;
-  --color-prov-suggest: #a98bf0;
-  --color-prov-human: #35b87d;
-  /* Tint behind a proposal, so a suggestion reads as a suggestion at a glance
-     without borrowing the severity ramp. 6.74:1 for prov-suggest text on it. */
-  --color-prov-suggest-soft: #170f26;
-
-  /* Requirement class, for the relationship graph.
-
-     A categorical palette, deliberately separate from the severity ramp and
-     the provenance colours even where a value coincides: a class is not a
-     severity, and recolouring "security" must not silently recolour a critical
-     finding. Every one of these clears 3:1 against `surface` (WCAG 1.4.11)
-     except where noted on the relationship colours below. */
-  --color-class-functional: #6f93f5;
-  --color-class-non-functional: #8b95a6;
-  --color-class-performance: #f08c3a;
-  --color-class-security: #f2555a;
-  --color-class-compliance: #a98bf0;
-  --color-class-operational: #35b87d;
-  --color-class-technical: #4bb3c9;
-  --color-class-business: #d9b02c;
-  --color-class-ux: #e07ab8;
-  --color-class-budget: #d9b02c;
-  --color-class-timeline: #f08c3a;
-  --color-class-regulatory: #a98bf0;
-  --color-class-organisational: #8b95a6;
-  --color-class-unknown: #8b95a6;
-
-  /* Relationship kind, for graph edges. `contradicts` uses the severity ramp
-     because it is the only edge that represents a problem.
-
-     `supports` is 1.85:1 against `surface` on purpose - it is the most common
-     edge by far, and drawing it at full strength turns the picture into noise.
-     The graph is `aria-hidden` and every edge is also a row in the
-     relationship table, so nothing depends on reading this line. */
-  --color-rel-duplicates: #a98bf0;
-  --color-rel-depends: #6f93f5;
-  --color-rel-supports: #3a414d;
-  --color-rel-impacts: #8b95a6;
-
-  --font-sans: ui-sans-serif, system-ui, "Segoe UI Variable Text", "Segoe UI",
-    -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
-  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
-
-  --radius-xs: 3px;
-  --radius-sm: 5px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
-}
+@import "./tokens.css";
 
 @layer base {
   *,
@@ -118,9 +13,24 @@
     -webkit-text-size-adjust: 100%;
   }
 
+  html[data-theme="light"] {
+    color-scheme: light;
+  }
+
+  /* The plotted ground.
+
+     Two hairline gradients on a 32px pitch, drawn in `grid` - a texture step
+     that sits a hair off the canvas. It carries no information and must never
+     be the only thing marking a boundary; it is there to make the page read
+     as drawn on paper rather than filled with a flat colour. */
   body {
     margin: 0;
     background-color: var(--color-canvas);
+    background-image:
+      linear-gradient(to right, var(--color-grid) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--color-grid) 1px, transparent 1px);
+    background-size: 32px 32px;
+    background-position: -1px -1px;
     color: var(--color-ink);
     font-family: var(--font-sans);
     font-size: 14px;
@@ -173,10 +83,12 @@
     border-radius: 99px;
     border: 3px solid var(--color-canvas);
   }
-  ::-webkit-scrollbar-thumb:hover { background: #3b4250; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--color-ink-faint); }
 
   dialog::backdrop {
-    background: rgb(4 5 7 / 0.72);
+    /* Deliberately dark in both modes. A scrim exists to push the page back;
+       a pale scrim over a pale page does not read as one. */
+    background: var(--color-scrim);
     backdrop-filter: blur(2px);
   }
 }
@@ -190,7 +102,10 @@
     z-index: 100;
     transform: translateY(-200%);
     background: var(--color-brand);
-    color: white;
+    /* Not `white`: the dark-mode brand is a bright cyan and white on it is
+       3.09:1. `on-brand` is the token that is guaranteed legible on the
+       brand fill in whichever mode is active. */
+    color: var(--color-on-brand);
     padding: 8px 14px;
     border-radius: var(--radius-sm);
     font-weight: 600;
@@ -211,6 +126,26 @@
     position: sticky;
     left: 0;
     background-color: var(--color-surface);
+  }
+
+  /* Timeline <-> quote pairing.
+
+     A mark in the diagram and the quote it refers to share a `data-mark`
+     value, so one rule per pair lights BOTH whichever one the pointer is
+     over. Done with `:has()` rather than a state hook: there is nothing to
+     remember between renders, and it keeps the aria-hidden SVG free of
+     focusable children.
+
+     Hover-only by design. Both statements are fully readable below the
+     diagram without it, so this adds a relationship, not information. */
+  .mark-halo {
+    opacity: 0;
+    transition: opacity 120ms ease;
+  }
+
+  [data-linked-marks]:has([data-mark="a"]:hover) [data-mark="a"] .mark-halo,
+  [data-linked-marks]:has([data-mark="b"]:hover) [data-mark="b"] .mark-halo {
+    opacity: 0.85;
   }
 
   /* Subtle entrance for route content. Disabled under reduced motion below. */
@@ -245,4 +180,20 @@
 @media print {
   body { background: white; color: black; }
   nav, .no-print { display: none !important; }
+}
+
+/* Timeline quote highlight, deliberately UNLAYERED.
+
+   The quotes carry a `bg-raised` utility, and utilities live in
+   `@layer utilities`, which beats `@layer components` no matter how specific
+   the component rule is. Unlayered rules beat every layer, so this is what
+   makes the hover actually change the surface. One step up the stack, not
+   `raised` again - setting a quote to the colour it already has is a no-op.
+
+   The border keeps each quote's own tone: that colour is what ties it to its
+   mark on the axis, so recolouring both to brand would break the pairing it
+   is meant to show. */
+[data-linked-marks]:has([data-mark="a"]:hover) blockquote[data-mark="a"],
+[data-linked-marks]:has([data-mark="b"]:hover) blockquote[data-mark="b"] {
+  background-color: var(--color-overlay);
 }

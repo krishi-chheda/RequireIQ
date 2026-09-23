@@ -64,14 +64,14 @@ export default async function RisksPage({
 
         <div className="grid gap-3 sm:grid-cols-4">
           {[
-            ["Open risks", allRisks.filter((r) => r.status === "open").length, "text-critical"],
+            ["Open risks", allRisks.filter((r) => r.status === "open").length, "text-critical-ink"],
             [
               "High or critical",
               allRisks.filter((r) => r.status === "open" && (r.severity === "high" || r.severity === "critical")).length,
-              "text-high",
+              "text-high-ink",
             ],
             ["Closed", allRisks.filter((r) => r.status !== "open").length, "text-positive"],
-            ["Unspecified topics", gaps.filter((g) => g.status === "open").length, "text-high"],
+            ["Unspecified topics", gaps.filter((g) => g.status === "open").length, "text-high-ink"],
           ].map(([label, value, tone]) => (
             <div key={label as string} className="rounded-lg border border-line bg-surface px-4 py-3">
               <Eyebrow>{label as string}</Eyebrow>

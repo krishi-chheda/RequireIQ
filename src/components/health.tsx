@@ -26,9 +26,9 @@ const BAND_COLOUR: Record<ProjectHealth["band"], string> = {
 
 const BAND_TEXT: Record<ProjectHealth["band"], string> = {
   healthy: "text-positive",
-  watch: "text-medium",
-  at_risk: "text-high",
-  critical: "text-critical",
+  watch: "text-medium-ink",
+  at_risk: "text-high-ink",
+  critical: "text-critical-ink",
 };
 
 export function HealthDial({ health, size = 104 }: { health: ProjectHealth; size?: number }) {
@@ -100,7 +100,7 @@ export function HealthBreakdown({ health }: { health: ProjectHealth }) {
               data-numeric
               className={cx(
                 "shrink-0 text-[13px] font-medium",
-                deduction.points > 0 ? "text-critical" : "text-ink-faint",
+                deduction.points > 0 ? "text-critical-ink" : "text-ink-faint",
               )}
             >
               {deduction.points > 0 ? `-${deduction.points}` : "0"}
